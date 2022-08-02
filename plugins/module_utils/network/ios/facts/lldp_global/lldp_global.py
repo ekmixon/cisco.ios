@@ -33,10 +33,7 @@ class Lldp_globalFacts(object):
         self.argument_spec = Lldp_globalArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -53,16 +50,15 @@ class Lldp_globalFacts(object):
         :rtype: dictionary
         :returns: facts
         """
-        objs = dict()
+        objs = {}
         if not data:
             data = self.get_lldp_global_data(connection)
         # operate on a collection of resource x
         config = data.split("\n")
         for conf in config:
             if conf:
-                obj = self.render_config(self.generated_spec, conf)
-                if obj:
-                    objs.update(obj)
+                if obj := self.render_config(self.generated_spec, conf):
+                    objs |= obj
         facts = {}
 
         if objs:

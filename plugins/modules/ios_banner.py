@@ -114,19 +114,19 @@ from re import search, M
 
 
 def map_obj_to_commands(updates, module):
-    commands = list()
+    commands = []
     want, have = updates
     state = module.params["state"]
     multiline_delimiter = module.params.get("multiline_delimiter")
     if state == "absent" and "text" in have.keys() and have["text"]:
-        commands.append("no banner %s" % module.params["banner"])
+        commands.append(f'no banner {module.params["banner"]}')
     elif state == "present":
         if have.get("text") and len(have.get("text")) > 1:
             haved = have.get("text")[:-1]
         else:
             haved = ""
         if want["text"] and (want["text"] != haved):
-            banner_cmd = "banner %s" % module.params["banner"]
+            banner_cmd = f'banner {module.params["banner"]}'
             banner_cmd += " {0}\n".format(multiline_delimiter)
             banner_cmd += want["text"].strip("\n")
             banner_cmd += "\n{0}".format(multiline_delimiter)
@@ -141,10 +141,9 @@ def map_config_to_obj(module):
     :param module:
     :return: banner config dict object.
     """
-    out = get_config(
-        module, flags="| begin banner %s" % module.params["banner"]
-    )
-    if out:
+    if out := get_config(
+        module, flags=f'| begin banner {module.params["banner"]}'
+    ):
         regex = "banner " + module.params["banner"] + " ^C\n"
         if search("banner " + module.params["banner"], out, M):
             output = str((out.split(regex))[1].split("^C\n")[0])
@@ -178,19 +177,19 @@ def main():
             choices=["login", "motd", "exec", "incoming", "slip-ppp"],
         ),
         multiline_delimiter=dict(default="@"),
-        text=dict(),
+        text={},
         state=dict(default="present", choices=["present", "absent"]),
     )
-    argument_spec.update(ios_argument_spec)
+
+    argument_spec |= ios_argument_spec
     required_if = [("state", "present", ("text",))]
     module = AnsibleModule(
         argument_spec=argument_spec,
         required_if=required_if,
         supports_check_mode=True,
     )
-    warnings = list()
     result = {"changed": False}
-    if warnings:
+    if warnings := []:
         result["warnings"] = warnings
     want = map_params_to_obj(module)
     have = map_config_to_obj(module)

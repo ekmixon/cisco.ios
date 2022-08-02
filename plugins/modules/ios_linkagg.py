@@ -168,7 +168,7 @@ def search_obj_in_list(group, lst):
 
 
 def map_obj_to_commands(updates, module):
-    commands = list()
+    commands = []
     want, have = updates
     purge = module.params["purge"]
     for w in want:
@@ -189,37 +189,57 @@ def map_obj_to_commands(updates, module):
                 commands.extend(cmd)
                 if members:
                     for m in members:
-                        commands.append("interface {0}".format(m))
-                        commands.append(
-                            "channel-group {0} mode {1}".format(group, mode)
+                        commands.extend(
+                            (
+                                "interface {0}".format(m),
+                                "channel-group {0} mode {1}".format(
+                                    group, mode
+                                ),
+                            )
                         )
+
             elif members:
                 if "members" not in obj_in_have.keys():
                     for m in members:
                         commands.extend(cmd)
-                        commands.append("interface {0}".format(m))
-                        commands.append(
-                            "channel-group {0} mode {1}".format(group, mode)
+                        commands.extend(
+                            (
+                                "interface {0}".format(m),
+                                "channel-group {0} mode {1}".format(
+                                    group, mode
+                                ),
+                            )
                         )
+
                 elif set(members) != set(obj_in_have["members"]):
                     missing_members = list(
                         set(members) - set(obj_in_have["members"])
                     )
                     for m in missing_members:
                         commands.extend(cmd)
-                        commands.append("interface {0}".format(m))
-                        commands.append(
-                            "channel-group {0} mode {1}".format(group, mode)
+                        commands.extend(
+                            (
+                                "interface {0}".format(m),
+                                "channel-group {0} mode {1}".format(
+                                    group, mode
+                                ),
+                            )
                         )
+
                     superfluous_members = list(
                         set(obj_in_have["members"]) - set(members)
                     )
                     for m in superfluous_members:
                         commands.extend(cmd)
-                        commands.append("interface {0}".format(m))
-                        commands.append(
-                            "no channel-group {0} mode {1}".format(group, mode)
+                        commands.extend(
+                            (
+                                "interface {0}".format(m),
+                                "no channel-group {0} mode {1}".format(
+                                    group, mode
+                                ),
+                            )
                         )
+
     if purge:
         for h in have:
             obj_in_want = search_obj_in_list(h["group"], want)
@@ -232,8 +252,7 @@ def map_obj_to_commands(updates, module):
 
 def map_params_to_obj(module):
     obj = []
-    aggregate = module.params.get("aggregate")
-    if aggregate:
+    if aggregate := module.params.get("aggregate"):
         for item in aggregate:
             for key in item:
                 if item.get(key) is None:
@@ -258,13 +277,11 @@ def parse_mode(module, config, group, member):
     netcfg = CustomNetworkConfig(indent=1, contents=config)
     parents = ["interface {0}".format(member)]
     body = netcfg.get_section(parents)
-    match_int = re.findall("interface {0}\\n".format(member), body, re.M)
-    if match_int:
-        match = re.search(
+    if match_int := re.findall("interface {0}\\n".format(member), body, re.M):
+        if match := re.search(
             "channel-group {0} mode (\\S+)".format(group), body, re.M
-        )
-        if match:
-            mode = match.group(1)
+        ):
+            mode = match[1]
     return mode
 
 
@@ -273,13 +290,11 @@ def parse_members(module, config, group):
     for line in config.strip().split("!"):
         l = line.strip()
         if l.startswith("interface"):
-            match_group = re.findall(
+            if match_group := re.findall(
                 "channel-group {0} mode".format(group), l, re.M
-            )
-            if match_group:
-                match = re.search("interface (\\S+)", l, re.M)
-                if match:
-                    members.append(match.group(1))
+            ):
+                if match := re.search("interface (\\S+)", l, re.M):
+                    members.append(match[1])
     return members
 
 
@@ -296,16 +311,14 @@ def get_channel(module, config, group):
 
 
 def map_config_to_obj(module):
-    objs = list()
+    objs = []
     config = get_config(module)
     for line in config.split("\n"):
         l = line.strip()
-        match = re.search("interface Port-channel(\\S+)", l, re.M)
-        if match:
-            obj = {}
-            group = match.group(1)
-            obj["group"] = group
-            obj.update(get_channel(module, config, group))
+        if match := re.search("interface Port-channel(\\S+)", l, re.M):
+            group = match[1]
+            obj = {"group": group}
+            obj |= get_channel(module, config, group)
             objs.append(obj)
     return objs
 
@@ -326,17 +339,20 @@ def main():
     mutually_exclusive = [["group", "aggregate"]]
     # remove default in aggregate spec, to handle common arguments
     remove_default_spec(aggregate_spec)
-    argument_spec = dict(
-        aggregate=dict(
-            type="list",
-            elements="dict",
-            options=aggregate_spec,
-            required_together=required_together,
-        ),
-        purge=dict(default=False, type="bool"),
+    argument_spec = (
+        dict(
+            aggregate=dict(
+                type="list",
+                elements="dict",
+                options=aggregate_spec,
+                required_together=required_together,
+            ),
+            purge=dict(default=False, type="bool"),
+        )
+        | element_spec
     )
-    argument_spec.update(element_spec)
-    argument_spec.update(ios_argument_spec)
+
+    argument_spec |= ios_argument_spec
     module = AnsibleModule(
         argument_spec=argument_spec,
         required_one_of=required_one_of,
@@ -344,9 +360,8 @@ def main():
         mutually_exclusive=mutually_exclusive,
         supports_check_mode=True,
     )
-    warnings = list()
     result = {"changed": False}
-    if warnings:
+    if warnings := []:
         result["warnings"] = warnings
     want = map_params_to_obj(module)
     have = map_config_to_obj(module)

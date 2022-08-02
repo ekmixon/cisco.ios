@@ -21,8 +21,7 @@ from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.n
 
 
 def _tmplt_ospf_interface(config_data):
-    command = "interface {name}".format(**config_data)
-    return command
+    return "interface {name}".format(**config_data)
 
 
 def _tmplt_ospf_interface_process(config_data):

@@ -38,10 +38,7 @@ class L3_InterfacesFacts(object):
         self.argument_spec = L3_InterfacesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -66,8 +63,7 @@ class L3_InterfacesFacts(object):
         config = ("\n" + data).split("\ninterface ")
         for conf in config:
             if conf:
-                obj = self.render_config(self.generated_spec, conf)
-                if obj:
+                if obj := self.render_config(self.generated_spec, conf):
                     objs.append(obj)
         facts = {}
 
@@ -92,7 +88,7 @@ class L3_InterfacesFacts(object):
         """
         config = deepcopy(spec)
         match = re.search(r"^(\S+)", conf)
-        intf = match.group(1)
+        intf = match[1]
 
         if get_interface_type(intf) == "unknown":
             return {}
@@ -102,13 +98,13 @@ class L3_InterfacesFacts(object):
         ipv4 = []
         ipv4_all = re.findall(r"ip address (\S+.*)", conf)
         for each in ipv4_all:
-            each_ipv4 = dict()
+            each_ipv4 = {}
             if "secondary" not in each and "dhcp" not in each:
                 each_ipv4["address"] = each
             elif "secondary" in each:
                 each_ipv4["address"] = each.split(" secondary")[0]
                 each_ipv4["secondary"] = True
-            elif "dhcp" in each:
+            else:
                 each_ipv4["address"] = "dhcp"
                 if "client-id" in each:
                     try:
@@ -116,8 +112,7 @@ class L3_InterfacesFacts(object):
                             each.split(" hostname ")[0].split("/")[-1]
                         )
                     except ValueError:
-                        obj = re.search("\\d+", each)
-                        if obj:
+                        if obj := re.search("\\d+", each):
                             dhcp_client = obj.group()
                         each_ipv4["dhcp_client"] = int(dhcp_client)
                 if "hostname" in each:
@@ -126,8 +121,7 @@ class L3_InterfacesFacts(object):
                     try:
                         each_ipv4["dhcp_client"] = int(each.split("/")[-1])
                     except ValueError:
-                        obj = re.search("\\d+", each)
-                        if obj:
+                        if obj := re.search("\\d+", each):
                             dhcp_client = obj.group()
                         each_ipv4["dhcp_client"] = int(dhcp_client)
                 if "hostname" in each and not each_ipv4["dhcp_hostname"]:
@@ -139,8 +133,7 @@ class L3_InterfacesFacts(object):
         ipv6 = []
         ipv6_all = re.findall(r"ipv6 address (\S+)", conf)
         for each in ipv6_all:
-            each_ipv6 = dict()
-            each_ipv6["address"] = each.lower()
+            each_ipv6 = {"address": each.lower()}
             ipv6.append(each_ipv6)
         config["ipv6"] = ipv6
 

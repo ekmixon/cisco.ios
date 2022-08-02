@@ -22,7 +22,7 @@ def remove_command_from_config_list(interface, cmd, commands):
     # To delete the passed config
     if interface not in commands:
         commands.insert(0, interface)
-    commands.append("no %s" % cmd)
+    commands.append(f"no {cmd}")
     return commands
 
 
@@ -42,12 +42,12 @@ def reverify_diff_py35(want, have):
     if not have:
         return True
     for each_want in want:
-        diff = True
-        for each_have in have:
-            if each_have == sorted(each_want) or sorted(each_have) == sorted(
-                each_want
-            ):
-                diff = False
+        diff = not any(
+            each_have == sorted(each_want)
+            or sorted(each_have) == sorted(each_want)
+            for each_have in have
+        )
+
         if diff:
             return True
     return False
@@ -69,7 +69,7 @@ def check_n_return_valid_ipv6_addr(module, input_list, filtered_ipv6_list):
 
 def new_dict_to_set(input_dict, temp_list, test_set, count=0):
     # recursive function to convert input dict to set for comparision
-    test_dict = dict()
+    test_dict = {}
     if isinstance(input_dict, dict):
         input_dict_len = len(input_dict)
         for k, v in sorted(iteritems(input_dict)):
@@ -84,7 +84,7 @@ def new_dict_to_set(input_dict, temp_list, test_set, count=0):
                             new_dict_to_set(each, temp_list, test_set, 0)
             else:
                 if v is not None:
-                    test_dict.update({k: v})
+                    test_dict[k] = v
                 try:
                     if (
                         tuple(iteritems(test_dict)) not in test_set
@@ -96,13 +96,13 @@ def new_dict_to_set(input_dict, temp_list, test_set, count=0):
                     temp_dict = {}
 
                     def expand_dict(dict_to_expand):
-                        temp = dict()
+                        temp = {}
                         for k, v in iteritems(dict_to_expand):
                             if isinstance(v, dict):
                                 expand_dict(v)
                             else:
                                 if v is not None:
-                                    temp.update({k: v})
+                                    temp[k] = v
                                 temp_dict.update(tuple(iteritems(temp)))
 
                     new_dict = {k: v}
@@ -112,51 +112,47 @@ def new_dict_to_set(input_dict, temp_list, test_set, count=0):
 
 
 def dict_to_set(sample_dict):
+    if not isinstance(sample_dict, dict):
+        return set(sample_dict)
     # Generate a set with passed dictionary for comparison
-    test_dict = dict()
-    if isinstance(sample_dict, dict):
-        for k, v in iteritems(sample_dict):
-            if v is not None:
-                if isinstance(v, list):
-                    if isinstance(v[0], dict):
-                        li = []
-                        for each in v:
-                            for key, value in iteritems(each):
-                                if isinstance(value, list):
-                                    each[key] = tuple(value)
-                            li.append(tuple(iteritems(each)))
-                        v = tuple(li)
-                    else:
-                        v = tuple(v)
-                elif isinstance(v, dict):
+    test_dict = {}
+    for k, v in iteritems(sample_dict):
+        if v is not None:
+            if isinstance(v, list):
+                if isinstance(v[0], dict):
                     li = []
-                    for key, value in iteritems(v):
-                        if isinstance(value, list):
-                            v[key] = tuple(value)
-                    li.extend(tuple(iteritems(v)))
+                    for each in v:
+                        for key, value in iteritems(each):
+                            if isinstance(value, list):
+                                each[key] = tuple(value)
+                        li.append(tuple(iteritems(each)))
                     v = tuple(li)
-                test_dict.update({k: v})
-        return_set = set(tuple(iteritems(test_dict)))
-    else:
-        return_set = set(sample_dict)
-    return return_set
+                else:
+                    v = tuple(v)
+            elif isinstance(v, dict):
+                for key, value in iteritems(v):
+                    if isinstance(value, list):
+                        v[key] = tuple(value)
+                li = list(tuple(iteritems(v)))
+                v = tuple(li)
+            test_dict[k] = v
+    return set(tuple(iteritems(test_dict)))
 
 
 def filter_dict_having_none_value(want, have):
     # Generate dict with have dict value which is None in want dict
-    test_dict = dict()
-    name = want.get("name")
-    if name:
+    test_dict = {}
+    if name := want.get("name"):
         test_dict["name"] = name
     diff_ip = False
     for k, v in iteritems(want):
         if isinstance(v, dict):
             for key, value in iteritems(v):
-                test_key_dict = dict()
+                test_key_dict = {}
                 if value is None:
                     if have.get(k):
                         dict_val = have.get(k).get(key)
-                        test_key_dict.update({key: dict_val})
+                        test_key_dict[key] = dict_val
                 elif (
                     k == "ipv6"
                     and value.lower() != have.get(k)[0].get(key).lower()
@@ -168,25 +164,25 @@ def filter_dict_having_none_value(want, have):
                     # every time 1st delete the existing IPV6 config and
                     # then apply the new change
                     dict_val = have.get(k)[0].get(key)
-                    test_key_dict.update({key: dict_val})
+                    test_key_dict[key] = dict_val
                 if test_key_dict:
-                    test_dict.update({k: test_key_dict})
+                    test_dict[k] = test_key_dict
         if isinstance(v, list):
             for key, value in iteritems(v[0]):
-                test_key_dict = dict()
+                test_key_dict = {}
                 if value is None:
                     if have.get(k) and key in have.get(k):
                         dict_val = have.get(k)[0].get(key)
-                        test_key_dict.update({key: dict_val})
+                        test_key_dict[key] = dict_val
                 elif have.get(k):
                     if (
                         k == "ipv6"
                         and value.lower() != have.get(k)[0].get(key).lower()
                     ):
                         dict_val = have.get(k)[0].get(key)
-                        test_key_dict.update({key: dict_val})
+                        test_key_dict[key] = dict_val
                 if test_key_dict:
-                    test_dict.update({k: test_key_dict})
+                    test_dict[k] = test_key_dict
             # below conditions checks are added to check if
             # secondary IP is configured, if yes then delete
             # the already configured IP if want and have IP
@@ -205,10 +201,10 @@ def filter_dict_having_none_value(want, have):
                             diff_ip = True
                     if each.get("secondary") and diff_ip is True:
                         test_key_dict.update({"secondary": True})
-                    test_dict.update({"ipv4": test_key_dict})
+                    test_dict["ipv4"] = test_key_dict
         if v is None:
             val = have.get(k)
-            test_dict.update({k: val})
+            test_dict[k] = val
     return test_dict
 
 
@@ -216,12 +212,12 @@ def remove_duplicate_interface(commands):
     # Remove duplicate interface from commands
     set_cmd = []
     for each in commands:
-        if "interface" in each:
-            if each not in set_cmd:
-                set_cmd.append(each)
-        else:
+        if (
+            "interface" in each
+            and each not in set_cmd
+            or "interface" not in each
+        ):
             set_cmd.append(each)
-
     return set_cmd
 
 
@@ -252,13 +248,12 @@ def validate_ipv6(value, module):
                     value
                 )
             )
-        else:
-            if not 0 <= int(address[1]) <= 128:
-                module.fail_json(
-                    msg="invalid value for mask: {0}, mask should be in range 0-128".format(
-                        address[1]
-                    )
+        elif not 0 <= int(address[1]) <= 128:
+            module.fail_json(
+                msg="invalid value for mask: {0}, mask should be in range 0-128".format(
+                    address[1]
                 )
+            )
 
 
 def validate_n_expand_ipv4(module, want):
@@ -276,7 +271,7 @@ def validate_n_expand_ipv4(module, want):
 
 def netmask_to_cidr(netmask):
     # convert netmask to cidr and returns the cidr notation
-    return str(sum([bin(int(x)).count("1") for x in netmask.split(".")]))
+    return str(sum(bin(int(x)).count("1") for x in netmask.split(".")))
 
 
 def is_valid_ip(ip_str):
@@ -345,11 +340,7 @@ def normalize_interface(name):
     else:
         number = _get_number(name)
 
-    if if_type:
-        proper_interface = if_type + number
-    else:
-        proper_interface = name
-
+    proper_interface = if_type + number if if_type else name
     return proper_interface
 
 

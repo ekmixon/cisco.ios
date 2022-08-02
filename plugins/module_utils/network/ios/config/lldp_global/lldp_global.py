@@ -68,10 +68,7 @@ class Lldp_global(ConfigBase):
         lldp_global_facts = facts["ansible_network_resources"].get(
             "lldp_global"
         )
-        if not lldp_global_facts:
-            return {}
-
-        return lldp_global_facts
+        return lldp_global_facts or {}
 
     def execute_module(self):
         """ Execute the module
@@ -80,13 +77,13 @@ class Lldp_global(ConfigBase):
         :returns: The result from moduel execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_lldp_global_facts = self.get_lldp_global_facts()
         else:
-            existing_lldp_global_facts = dict()
+            existing_lldp_global_facts = {}
 
         if self.state in self.ACTION_STATES or self.state == "rendered":
             commands.extend(self.set_config(existing_lldp_global_facts))
@@ -109,7 +106,7 @@ class Lldp_global(ConfigBase):
                 )
             result["parsed"] = self.get_lldp_global_facts(data=running_config)
         else:
-            changed_lldp_global_facts = dict()
+            changed_lldp_global_facts = {}
 
         if self.state in self.ACTION_STATES:
             result["before"] = existing_lldp_global_facts
@@ -211,7 +208,7 @@ class Lldp_global(ConfigBase):
 
     def _remove_command_from_config_list(self, cmd, commands):
         if cmd not in commands:
-            commands.append("no %s" % cmd)
+            commands.append(f"no {cmd}")
 
     def add_command_to_config_list(self, cmd, commands):
         if cmd not in commands:
@@ -224,9 +221,7 @@ class Lldp_global(ConfigBase):
         # Get the diff b/w want and have
         want_dict = dict_to_set(want)
         have_dict = dict_to_set(have)
-        diff = want_dict - have_dict
-
-        if diff:
+        if diff := want_dict - have_dict:
             diff = dict(diff)
             holdtime = diff.get("holdtime")
             enabled = diff.get("enabled")

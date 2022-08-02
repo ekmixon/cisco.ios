@@ -57,9 +57,7 @@ class Static_Routes(ConfigBase):
         static_routes_facts = facts["ansible_network_resources"].get(
             "static_routes"
         )
-        if not static_routes_facts:
-            return []
-        return static_routes_facts
+        return static_routes_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -68,8 +66,8 @@ class Static_Routes(ConfigBase):
         :returns: The result from module execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_static_routes_facts = self.get_static_routes_facts()
@@ -151,7 +149,7 @@ class Static_Routes(ConfigBase):
             commands = self._state_overridden(want, have)
         elif state == "deleted":
             commands = self._state_deleted(want, have)
-        elif state == "merged" or state == "rendered":
+        elif state in ["merged", "rendered"]:
             commands = self._state_merged(want, have)
         elif state == "replaced":
             commands = self._state_replaced(want, have)
@@ -214,11 +212,7 @@ class Static_Routes(ConfigBase):
                                             }
                                         )
                                         # updating the have_dict with next_hops val that's not None
-                                        new_have_dict = {}
-                                        for k, v in have_dict.items():
-                                            if v is not None:
-                                                new_have_dict.update({k: v})
-
+                                        new_have_dict = {k: v for k, v in have_dict.items() if v is not None}
                                         # Set the new config from the user provided want config
                                         cmd = self._set_config(
                                             w,
@@ -302,8 +296,7 @@ class Static_Routes(ConfigBase):
                         check = False
                         for w in temp_want:
                             for addr_want in w.get("address_families"):
-                                count = 0
-                                for route_want in addr_want.get("routes"):
+                                for count, route_want in enumerate(addr_want.get("routes")):
                                     if (
                                         route_want.get("dest")
                                         == route_have.get("dest")
@@ -346,7 +339,6 @@ class Static_Routes(ConfigBase):
                                             )
                                         )
                                         del addr_want.get("routes")[count]
-                                    count += 1
                                 if check:
                                     break
                             if check:
@@ -563,17 +555,17 @@ class Static_Routes(ConfigBase):
         if forward_router_address:
             cmd = cmd + " {0}".format(forward_router_address)
         if dhcp:
-            cmd = cmd + " DHCP"
+            cmd = f"{cmd} DHCP"
         if distance_metric:
             cmd = cmd + " {0}".format(distance_metric)
         if global_route_config:
-            cmd = cmd + " global"
+            cmd = f"{cmd} global"
         if multicast:
-            cmd = cmd + " multicast"
+            cmd = f"{cmd} multicast"
         if name:
             cmd = cmd + " name {0}".format(name)
         if permanent:
-            cmd = cmd + " permanent"
+            cmd = f"{cmd} permanent"
         elif track:
             cmd = cmd + " track {0}".format(track)
         if tag:
@@ -593,19 +585,13 @@ class Static_Routes(ConfigBase):
         commands = []
         cmd = None
 
-        vrf_diff = False
-        topology_diff = False
         want_vrf = want.get("vrf")
         have_vrf = have.get("vrf")
-        if want_vrf != have_vrf:
-            vrf_diff = True
+        vrf_diff = want_vrf != have_vrf
         want_topology = want.get("topology")
         have_topology = have.get("topology")
-        if want_topology != have_topology:
-            topology_diff = True
-
-        have_dest = route_have.get("dest")
-        if have_dest:
+        topology_diff = want_topology != have_topology
+        if have_dest := route_have.get("dest"):
             have_set.add(tuple(iteritems({"dest": have_dest})))
 
         # configure set cmd for each hops under the same destination
@@ -624,13 +610,12 @@ class Static_Routes(ConfigBase):
                 each.add(tuple(iteritems({"dest": route_want.get("dest")})))
                 temp_want = {}
                 for each_want in each:
-                    temp_want.update(dict(each_want))
+                    temp_want |= dict(each_want)
 
                 if temp_want.get("afi") == "ipv4":
                     cmd = "ip route "
-                    vrf = temp_want.get("vrf")
-                    if vrf:
-                        cmd = cmd + "vrf {0} ".format(vrf)
+                    if vrf := temp_want.get("vrf"):
+                        cmd += "vrf {0} ".format(vrf)
                     cmd = self.prepare_config_commands(temp_want, cmd)
                 elif temp_want.get("afi") == "ipv6":
                     cmd = "ipv6 route "
@@ -651,17 +636,12 @@ class Static_Routes(ConfigBase):
         commands = []
         cmd = None
 
-        vrf_diff = False
-        topology_diff = False
         want_vrf = want.get("vrf")
         have_vrf = have.get("vrf")
-        if want_vrf != have_vrf:
-            vrf_diff = True
+        vrf_diff = want_vrf != have_vrf
         want_topology = want.get("topology")
         have_topology = have.get("topology")
-        if want_topology != have_topology:
-            topology_diff = True
-
+        topology_diff = want_topology != have_topology
         want_set = set()
         new_dict_to_set(addr_want, [], want_set, 0)
 
@@ -697,13 +677,12 @@ class Static_Routes(ConfigBase):
                     )
                 temp_want = {}
                 for each_want in each:
-                    temp_want.update(dict(each_want))
+                    temp_want |= dict(each_want)
 
                 if temp_want.get("afi") == "ipv4":
                     cmd = "no ip route "
-                    vrf = temp_want.get("vrf")
-                    if vrf:
-                        cmd = cmd + "vrf {0} ".format(vrf)
+                    if vrf := temp_want.get("vrf"):
+                        cmd += "vrf {0} ".format(vrf)
                     cmd = self.prepare_config_commands(temp_want, cmd)
                 elif temp_want.get("afi") == "ipv6":
                     cmd = "no ipv6 route "

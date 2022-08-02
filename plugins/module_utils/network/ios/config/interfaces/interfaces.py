@@ -63,10 +63,7 @@ class Interfaces(ConfigBase):
             self.gather_subset, self.gather_network_resources, data=data
         )
         interfaces_facts = facts["ansible_network_resources"].get("interfaces")
-        if not interfaces_facts:
-            return []
-
-        return interfaces_facts
+        return interfaces_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -75,8 +72,8 @@ class Interfaces(ConfigBase):
         :returns: The result from moduel execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_interfaces_facts = self.get_interfaces_facts()
@@ -160,7 +157,7 @@ class Interfaces(ConfigBase):
             commands = self._state_overridden(want, have)
         elif self.state == "deleted":
             commands = self._state_deleted(want, have)
-        elif self.state == "merged" or self.state == "rendered":
+        elif self.state in ["merged", "rendered"]:
             commands = self._state_merged(want, have)
         elif self.state == "replaced":
             commands = self._state_replaced(want, have)
@@ -187,10 +184,10 @@ class Interfaces(ConfigBase):
                     break
             else:
                 # configuring non-existing interface
-                commands.extend(self._set_config(interface, dict()))
+                commands.extend(self._set_config(interface, {}))
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -210,12 +207,11 @@ class Interfaces(ConfigBase):
 
         for each in have:
             for interface in want:
-                count = 0
                 if each["name"] == interface["name"]:
                     break
                 if interface["name"] in each["name"]:
                     break
-                count += 1
+                count = 0 + 1
             else:
                 # We didn't find a matching desired state, which means we can
                 # pretend we received an empty desired state.
@@ -223,7 +219,7 @@ class Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each))
             # as the pre-existing interface are now configured by
             # above set_config call, deleting the respective
@@ -233,7 +229,7 @@ class Interfaces(ConfigBase):
         # Iterating through want list which now only have new interfaces to be
         # configured
         for each in want:
-            commands.extend(self._set_config(each, dict()))
+            commands.extend(self._set_config(each, {}))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
 
@@ -256,7 +252,7 @@ class Interfaces(ConfigBase):
                     break
             else:
                 # configuring non-existing interface
-                commands.extend(self._set_config(interface, dict()))
+                commands.extend(self._set_config(interface, {}))
                 continue
             commands.extend(self._set_config(interface, each))
 
@@ -285,7 +281,7 @@ class Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
         else:
             for each in have:
-                want = dict()
+                want = {}
                 commands.extend(self._clear_config(want, each))
 
         return commands
@@ -298,13 +294,11 @@ class Interfaces(ConfigBase):
         # Get the diff b/w want and have
         want_dict = dict_to_set(want)
         have_dict = dict_to_set(have)
-        diff = want_dict - have_dict
-
-        if diff:
+        if diff := want_dict - have_dict:
             diff = dict(diff)
             for item in self.params:
                 if diff.get(item):
-                    cmd = item + " " + str(want.get(item))
+                    cmd = f"{item} {str(want.get(item))}"
                     add_command_to_config_list(interface, cmd, commands)
             if diff.get("enabled"):
                 add_command_to_config_list(interface, "no shutdown", commands)

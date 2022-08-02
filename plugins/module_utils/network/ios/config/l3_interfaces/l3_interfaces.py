@@ -62,10 +62,7 @@ class L3_Interfaces(ConfigBase):
         l3_interfaces_facts = facts["ansible_network_resources"].get(
             "l3_interfaces"
         )
-        if not l3_interfaces_facts:
-            return []
-
-        return l3_interfaces_facts
+        return l3_interfaces_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -73,8 +70,8 @@ class L3_Interfaces(ConfigBase):
         :returns: The result from module execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_l3_interfaces_facts = self.get_l3_interfaces_facts()
@@ -178,12 +175,10 @@ class L3_Interfaces(ConfigBase):
                     break
             else:
                 if "." in interface["name"]:
-                    commands.extend(
-                        self._set_config(interface, dict(), module)
-                    )
+                    commands.extend(self._set_config(interface, {}, module))
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each, module))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -210,7 +205,7 @@ class L3_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(**kwargs))
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each, module))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -231,13 +226,9 @@ class L3_Interfaces(ConfigBase):
                     break
             else:
                 if "." in interface["name"]:
-                    commands.extend(
-                        self._set_config(interface, dict(), module)
-                    )
+                    commands.extend(self._set_config(interface, {}, module))
                 if self.state == "rendered":
-                    commands.extend(
-                        self._set_config(interface, dict(), module)
-                    )
+                    commands.extend(self._set_config(interface, {}, module))
                 continue
             commands.extend(self._set_config(interface, each, module))
 
@@ -264,7 +255,7 @@ class L3_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
         else:
             for each in have:
-                want = dict()
+                want = {}
                 commands.extend(self._clear_config(want, each))
 
         return commands
@@ -358,7 +349,7 @@ class L3_Interfaces(ConfigBase):
                         cmd = "ip address {0}".format(ipv4_dict["address"])
                         if ipv4_dict.get("secondary"):
                             cmd += " secondary"
-                    elif ipv4_dict.get("address") == "dhcp":
+                    else:
                         cmd = "ip address dhcp"
                         if "/" in interface:
                             dhcp_interface = want["name"].split("/")[0] + "/"
@@ -409,8 +400,6 @@ class L3_Interfaces(ConfigBase):
         return commands
 
     def _clear_config(self, want, have):
-        # Delete the interface config based on the want and have config
-        count = 0
         commands = []
         if want.get("name"):
             interface = "interface " + want["name"]
@@ -418,7 +407,7 @@ class L3_Interfaces(ConfigBase):
             interface = "interface " + have["name"]
 
         if have.get("ipv4") and want.get("ipv4"):
-            for each in have.get("ipv4"):
+            for count, each in enumerate(have.get("ipv4")):
                 if each.get("secondary") and not (
                     want.get("ipv4")[count].get("secondary")
                 ):
@@ -426,7 +415,6 @@ class L3_Interfaces(ConfigBase):
                         each.get("address")
                     )
                     remove_command_from_config_list(interface, cmd, commands)
-                count += 1
         if have.get("ipv4") and not want.get("ipv4"):
             remove_command_from_config_list(interface, "ip address", commands)
         if have.get("ipv6") and not want.get("ipv6"):

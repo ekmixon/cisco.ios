@@ -150,7 +150,7 @@ def main():
         ),
         vrf=dict(type="str"),
     )
-    argument_spec.update(ios_argument_spec)
+    argument_spec |= ios_argument_spec
     module = AnsibleModule(argument_spec=argument_spec)
     count = module.params["count"]
     dest = module.params["dest"]
@@ -158,9 +158,8 @@ def main():
     size = module.params["size"]
     source = module.params["source"]
     vrf = module.params["vrf"]
-    warnings = list()
     results = {}
-    if warnings:
+    if warnings := []:
         results["warnings"] = warnings
     results["commands"] = [build_ping(dest, count, source, vrf, size, df_bit)]
     ping_results = run_commands(module, commands=results["commands"])
@@ -171,7 +170,7 @@ def main():
             stats = line
     success, rx, tx, rtt = parse_ping(stats)
     loss = abs(100 - int(success))
-    results["packet_loss"] = str(loss) + "%"
+    results["packet_loss"] = f"{str(loss)}%"
     results["packets_rx"] = int(rx)
     results["packets_tx"] = int(tx)
     # Convert rtt values to int
@@ -219,12 +218,7 @@ def parse_ping(ping_stats):
     )
     rate = rate_re.match(ping_stats)
     rtt = rtt_re.match(ping_stats)
-    return (
-        rate.group("pct"),
-        rate.group("rx"),
-        rate.group("tx"),
-        rtt.groupdict(),
-    )
+    return rate["pct"], rate["rx"], rate["tx"], rtt.groupdict()
 
 
 def validate_results(module, loss, results):

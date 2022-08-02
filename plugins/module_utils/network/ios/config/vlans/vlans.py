@@ -52,9 +52,7 @@ class Vlans(ConfigBase):
             self.gather_subset, self.gather_network_resources, data=data
         )
         interfaces_facts = facts["ansible_network_resources"].get("vlans")
-        if not interfaces_facts:
-            return []
-        return interfaces_facts
+        return interfaces_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -63,8 +61,8 @@ class Vlans(ConfigBase):
         :returns: The result from module execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_vlans_facts = self.get_vlans_facts()
@@ -166,7 +164,7 @@ class Vlans(ConfigBase):
             if check:
                 commands.extend(self._set_config(each, every))
             else:
-                commands.extend(self._set_config(each, dict()))
+                commands.extend(self._set_config(each, {}))
 
         return commands
 
@@ -200,7 +198,7 @@ class Vlans(ConfigBase):
         # Iterating through want_local list which now only have new VLANs to be
         # configured
         for each in want_local:
-            commands.extend(self._set_config(each, dict()))
+            commands.extend(self._set_config(each, {}))
 
         return commands
 
@@ -223,7 +221,7 @@ class Vlans(ConfigBase):
             if check:
                 commands.extend(self._set_config(each, every))
             else:
-                commands.extend(self._set_config(each, dict()))
+                commands.extend(self._set_config(each, {}))
 
         return commands
 
@@ -249,7 +247,7 @@ class Vlans(ConfigBase):
                     commands.extend(self._clear_config(each, every))
         else:
             for each in have:
-                commands.extend(self._clear_config(dict(), each))
+                commands.extend(self._clear_config({}, each))
 
         return commands
 
@@ -257,9 +255,9 @@ class Vlans(ConfigBase):
         if vlan not in commands and cmd != "vlan":
             commands.insert(0, vlan)
         elif cmd == "vlan":
-            commands.append("no %s" % vlan)
+            commands.append(f"no {vlan}")
             return commands
-        commands.append("no %s" % cmd)
+        commands.append(f"no {cmd}")
         return commands
 
     def add_command_to_config_list(self, vlan_id, cmd, commands):
@@ -307,9 +305,7 @@ class Vlans(ConfigBase):
         have_diff = have_dict - want_dict
 
         if diff:
-            if have_diff and (
-                self.state == "replaced" or self.state == "overridden"
-            ):
+            if have_diff and self.state in ["replaced", "overridden"]:
                 negate_have_config(diff, have_diff, vlan, commands)
 
             name = dict(diff).get("name")
@@ -335,9 +331,7 @@ class Vlans(ConfigBase):
                 self.add_command_to_config_list(vlan, "shutdown", commands)
             elif shutdown == "disabled":
                 self.add_command_to_config_list(vlan, "no shutdown", commands)
-        elif have_diff and (
-            self.state == "replaced" or self.state == "overridden"
-        ):
+        elif have_diff and self.state in ["replaced", "overridden"]:
             negate_have_config(diff, have_diff, vlan, commands)
 
         return commands

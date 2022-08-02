@@ -37,10 +37,7 @@ class L2_InterfacesFacts(object):
         self.argument_spec = L2_InterfacesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -65,8 +62,7 @@ class L2_InterfacesFacts(object):
         config = ("\n" + data).split("\ninterface ")
         for conf in config:
             if conf:
-                obj = self.render_config(self.generated_spec, conf)
-                if obj:
+                if obj := self.render_config(self.generated_spec, conf):
                     objs.append(obj)
 
         facts = {}
@@ -91,7 +87,7 @@ class L2_InterfacesFacts(object):
         """
         config = deepcopy(spec)
         match = re.search(r"^(\S+)", conf)
-        intf = match.group(1)
+        intf = match[1]
 
         if get_interface_type(intf) == "unknown":
             return {}
@@ -108,35 +104,30 @@ class L2_InterfacesFacts(object):
         ):
             # populate the facts from the configuration
             config["name"] = normalize_interface(intf)
-            has_mode = utils.parse_conf_arg(conf, "switchport mode")
-            if has_mode:
+            if has_mode := utils.parse_conf_arg(conf, "switchport mode"):
                 config["mode"] = has_mode
-            has_access = utils.parse_conf_arg(conf, "switchport access vlan")
-            if has_access:
+            if has_access := utils.parse_conf_arg(conf, "switchport access vlan"):
                 config["access"] = {"vlan": int(has_access)}
 
-            has_voice = utils.parse_conf_arg(conf, "switchport voice vlan")
-            if has_voice:
+            if has_voice := utils.parse_conf_arg(conf, "switchport voice vlan"):
                 config["voice"] = {"vlan": int(has_voice)}
 
-            trunk = dict()
-            trunk["encapsulation"] = utils.parse_conf_arg(
-                conf, "switchport trunk encapsulation"
-            )
-            native_vlan = utils.parse_conf_arg(conf, "native vlan")
-            if native_vlan:
+            trunk = {
+                "encapsulation": utils.parse_conf_arg(
+                    conf, "switchport trunk encapsulation"
+                )
+            }
+
+            if native_vlan := utils.parse_conf_arg(conf, "native vlan"):
                 trunk["native_vlan"] = int(native_vlan)
-            allowed_vlan = utils.parse_conf_arg(conf, "allowed vlan")
-            if allowed_vlan:
+            if allowed_vlan := utils.parse_conf_arg(conf, "allowed vlan"):
                 trunk["allowed_vlans"] = allowed_vlan.split(",")
-            allowed_vlan_add_all = re.findall("allowed vlan add.*", conf)
-            if allowed_vlan_add_all:
+            if allowed_vlan_add_all := re.findall("allowed vlan add.*", conf):
                 for each in allowed_vlan_add_all:
                     trunk["allowed_vlans"].extend(
                         each.split("allowed vlan add ")[1].split(",")
                     )
-            pruning_vlan = utils.parse_conf_arg(conf, "pruning vlan")
-            if pruning_vlan:
+            if pruning_vlan := utils.parse_conf_arg(conf, "pruning vlan"):
                 trunk["pruning_vlans"] = pruning_vlan.split(",")
 
             config["trunk"] = trunk

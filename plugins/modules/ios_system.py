@@ -140,7 +140,7 @@ def has_vrf(module, vrf):
 
 def requires_vrf(module, vrf):
     if not has_vrf(module, vrf):
-        module.fail_json(msg="vrf %s is not configured" % vrf)
+        module.fail_json(msg=f"vrf {vrf} is not configured")
 
 
 def diff_list(want, have):
@@ -150,7 +150,7 @@ def diff_list(want, have):
 
 
 def map_obj_to_commands(want, have, module):
-    commands = list()
+    commands = []
     state = module.params["state"]
 
     def needs_update(x):
@@ -161,16 +161,16 @@ def map_obj_to_commands(want, have, module):
             commands.append("no hostname")
         if have["lookup_source"]:
             commands.append(
-                "no ip domain lookup source-interface %s"
-                % have["lookup_source"]
+                f'no ip domain lookup source-interface {have["lookup_source"]}'
             )
+
         if have["lookup_enabled"] is False:
             commands.append("ip domain lookup")
         vrfs = set()
         for item in have["domain_name"]:
             if item["vrf"] and item["vrf"] not in vrfs:
                 vrfs.add(item["vrf"])
-                commands.append("no ip domain name vrf %s" % item["vrf"])
+                commands.append(f'no ip domain name vrf {item["vrf"]}')
             elif None not in vrfs:
                 vrfs.add(None)
                 commands.append("no ip domain name")
@@ -178,7 +178,7 @@ def map_obj_to_commands(want, have, module):
         for item in have["domain_search"]:
             if item["vrf"] and item["vrf"] not in vrfs:
                 vrfs.add(item["vrf"])
-                commands.append("no ip domain list vrf %s" % item["vrf"])
+                commands.append(f'no ip domain list vrf {item["vrf"]}')
             elif None not in vrfs:
                 vrfs.add(None)
                 commands.append("no ip domain list")
@@ -186,96 +186,76 @@ def map_obj_to_commands(want, have, module):
         for item in have["name_servers"]:
             if item["vrf"] and item["vrf"] not in vrfs:
                 vrfs.add(item["vrf"])
-                commands.append("no ip name-server vrf %s" % item["vrf"])
+                commands.append(f'no ip name-server vrf {item["vrf"]}')
             elif None not in vrfs:
                 vrfs.add(None)
                 commands.append("no ip name-server")
     elif state == "present":
         if needs_update("hostname"):
-            commands.append("hostname %s" % want["hostname"])
+            commands.append(f'hostname {want["hostname"]}')
         if needs_update("lookup_source"):
-            commands.append(
-                "ip domain lookup source-interface %s" % want["lookup_source"]
-            )
+            commands.append(f'ip domain lookup source-interface {want["lookup_source"]}')
         if needs_update("lookup_enabled"):
             cmd = "ip domain lookup"
             if want["lookup_enabled"] is False:
-                cmd = "no %s" % cmd
+                cmd = f"no {cmd}"
             commands.append(cmd)
         if want["domain_name"]:
             adds, removes = diff_list(want["domain_name"], have["domain_name"])
             for item in removes:
                 if item["vrf"]:
-                    commands.append(
-                        "no ip domain name vrf %s %s"
-                        % (item["vrf"], item["name"])
-                    )
+                    commands.append(f'no ip domain name vrf {item["vrf"]} {item["name"]}')
                 else:
-                    commands.append("no ip domain name %s" % item["name"])
+                    commands.append(f'no ip domain name {item["name"]}')
             for item in adds:
                 if item["vrf"]:
                     requires_vrf(module, item["vrf"])
-                    commands.append(
-                        "ip domain name vrf %s %s"
-                        % (item["vrf"], item["name"])
-                    )
+                    commands.append(f'ip domain name vrf {item["vrf"]} {item["name"]}')
                 else:
-                    commands.append("ip domain name %s" % item["name"])
+                    commands.append(f'ip domain name {item["name"]}')
         if want["domain_search"]:
             adds, removes = diff_list(
                 want["domain_search"], have["domain_search"]
             )
             for item in removes:
                 if item["vrf"]:
-                    commands.append(
-                        "no ip domain list vrf %s %s"
-                        % (item["vrf"], item["name"])
-                    )
+                    commands.append(f'no ip domain list vrf {item["vrf"]} {item["name"]}')
                 else:
-                    commands.append("no ip domain list %s" % item["name"])
+                    commands.append(f'no ip domain list {item["name"]}')
             for item in adds:
                 if item["vrf"]:
                     requires_vrf(module, item["vrf"])
-                    commands.append(
-                        "ip domain list vrf %s %s"
-                        % (item["vrf"], item["name"])
-                    )
+                    commands.append(f'ip domain list vrf {item["vrf"]} {item["name"]}')
                 else:
-                    commands.append("ip domain list %s" % item["name"])
+                    commands.append(f'ip domain list {item["name"]}')
         if want["name_servers"]:
             adds, removes = diff_list(
                 want["name_servers"], have["name_servers"]
             )
             for item in removes:
                 if item["vrf"]:
-                    commands.append(
-                        "no ip name-server vrf %s %s"
-                        % (item["vrf"], item["server"])
-                    )
+                    commands.append(f'no ip name-server vrf {item["vrf"]} {item["server"]}')
                 else:
-                    commands.append("no ip name-server %s" % item["server"])
+                    commands.append(f'no ip name-server {item["server"]}')
             for item in adds:
                 if item["vrf"]:
                     requires_vrf(module, item["vrf"])
-                    commands.append(
-                        "ip name-server vrf %s %s"
-                        % (item["vrf"], item["server"])
-                    )
+                    commands.append(f'ip name-server vrf {item["vrf"]} {item["server"]}')
                 else:
-                    commands.append("ip name-server %s" % item["server"])
+                    commands.append(f'ip name-server {item["server"]}')
     return commands
 
 
 def parse_hostname(config):
     match = re.search("^hostname (\\S+)", config, re.M)
-    return match.group(1)
+    return match[1]
 
 
 def parse_domain_name(config):
     match = re.findall(
         "^ip domain[- ]name (?:vrf (\\S+) )*(\\S+)", config, re.M
     )
-    matches = list()
+    matches = []
     for vrf, name in match:
         if not vrf:
             vrf = None
@@ -287,7 +267,7 @@ def parse_domain_search(config):
     match = re.findall(
         "^ip domain[- ]list (?:vrf (\\S+) )*(\\S+)", config, re.M
     )
-    matches = list()
+    matches = []
     for vrf, name in match:
         if not vrf:
             vrf = None
@@ -297,21 +277,19 @@ def parse_domain_search(config):
 
 def parse_name_servers(config):
     match = re.findall("^ip name-server (?:vrf (\\S+) )*(.*)", config, re.M)
-    matches = list()
+    matches = []
     for vrf, servers in match:
         if not vrf:
             vrf = None
-        for server in servers.split():
-            matches.append({"server": server, "vrf": vrf})
+        matches.extend({"server": server, "vrf": vrf} for server in servers.split())
     return matches
 
 
 def parse_lookup_source(config):
-    match = re.search(
+    if match := re.search(
         "ip domain[- ]lookup source-interface (\\S+)", config, re.M
-    )
-    if match:
-        return match.group(1)
+    ):
+        return match[1]
 
 
 def map_config_to_obj(module):
@@ -333,18 +311,15 @@ def map_params_to_obj(module):
         "lookup_source": module.params["lookup_source"],
         "lookup_enabled": module.params["lookup_enabled"],
     }
-    domain_name = ComplexList(dict(name=dict(key=True), vrf=dict()), module)
-    domain_search = ComplexList(dict(name=dict(key=True), vrf=dict()), module)
-    name_servers = ComplexList(dict(server=dict(key=True), vrf=dict()), module)
+    domain_name = ComplexList(dict(name=dict(key=True), vrf={}), module)
+    domain_search = ComplexList(dict(name=dict(key=True), vrf={}), module)
+    name_servers = ComplexList(dict(server=dict(key=True), vrf={}), module)
     for arg, cast in [
         ("domain_name", domain_name),
         ("domain_search", domain_search),
         ("name_servers", name_servers),
     ]:
-        if module.params[arg]:
-            obj[arg] = cast(module.params[arg])
-        else:
-            obj[arg] = None
+        obj[arg] = cast(module.params[arg]) if module.params[arg] else None
     return obj
 
 
@@ -352,25 +327,24 @@ def main():
     """ Main entry point for Ansible module execution
     """
     argument_spec = dict(
-        hostname=dict(),
+        hostname={},
         domain_name=dict(type="list", elements="raw"),
         domain_search=dict(type="list", elements="raw"),
         name_servers=dict(type="list", elements="raw"),
-        lookup_source=dict(),
+        lookup_source={},
         lookup_enabled=dict(type="bool"),
         state=dict(choices=["present", "absent"], default="present"),
     )
-    argument_spec.update(ios_argument_spec)
+
+    argument_spec |= ios_argument_spec
     module = AnsibleModule(
         argument_spec=argument_spec, supports_check_mode=True
     )
-    result = {"changed": False}
-    warnings = list()
-    result["warnings"] = warnings
+    warnings = []
     want = map_params_to_obj(module)
     have = map_config_to_obj(module)
     commands = map_obj_to_commands(want, have, module)
-    result["commands"] = commands
+    result = {"changed": False, "warnings": warnings, "commands": commands}
     if commands:
         if not module.check_mode:
             load_config(module, commands)

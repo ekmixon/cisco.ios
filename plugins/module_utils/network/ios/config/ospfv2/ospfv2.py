@@ -64,19 +64,14 @@ class Ospfv2(ResourceModule):
         :returns: the commands necessary to migrate the current configuration
                   to the desired configuration
         """
+        wantd = {}
         if self.want:
-            wantd = {}
             for entry in self.want.get("processes", []):
-                wantd.update({(entry["process_id"], entry.get("vrf")): entry})
-        else:
-            wantd = {}
+                wantd[(entry["process_id"], entry.get("vrf"))] = entry
+        haved = {}
         if self.have:
-            haved = {}
             for entry in self.have.get("processes", []):
-                haved.update({(entry["process_id"], entry.get("vrf")): entry})
-        else:
-            haved = {}
-
+                haved[(entry["process_id"], entry.get("vrf"))] = entry
         # turn all lists of dicts into dicts prior to merge
         for each in wantd, haved:
             self.list_to_dict(each)
@@ -87,10 +82,7 @@ class Ospfv2(ResourceModule):
         # if state is deleted, limit the have to anything in want
         # set want to nothing
         if self.state == "deleted":
-            temp = {}
-            for k, v in iteritems(haved):
-                if k in wantd or not wantd:
-                    temp.update({k: v})
+            temp = {k: v for k, v in iteritems(haved) if k in wantd or not wantd}
             haved = temp
             wantd = {}
 
@@ -104,56 +96,56 @@ class Ospfv2(ResourceModule):
             self._compare(want=want, have=haved.pop(k, {}))
 
     def _compare(self, want, have):
-        parsers = [
-            "adjacency",
-            "address_family",
-            "auto_cost",
-            "bfd",
-            "capability",
-            "compatible",
-            "default_information",
-            "default_metric",
-            "discard_route",
-            "distance.admin_distance",
-            "distance.ospf",
-            "distribute_list.acls",
-            "distribute_list.prefix",
-            "distribute_list.route_map",
-            "domain_id",
-            "domain_tag",
-            "event_log",
-            "help",
-            "ignore",
-            "interface_id",
-            "ispf",
-            "limit",
-            "local_rib_criteria",
-            "log_adjacency_changes",
-            "max_lsa",
-            "max_metric",
-            "maximum_paths",
-            "mpls.ldp",
-            "mpls.traffic_eng",
-            "neighbor",
-            "network",
-            "nsf.cisco",
-            "nsf.ietf",
-            "passive_interface",
-            "prefix_suppression",
-            "priority",
-            "queue_depth.hello",
-            "queue_depth.update",
-            "router_id",
-            "shutdown",
-            "summary_address",
-            "timers.throttle.lsa",
-            "timers.throttle.spf",
-            "traffic_share",
-            "ttl_security",
-        ]
-
         if want != have:
             self.addcmd(want or have, "pid", False)
+            parsers = [
+                "adjacency",
+                "address_family",
+                "auto_cost",
+                "bfd",
+                "capability",
+                "compatible",
+                "default_information",
+                "default_metric",
+                "discard_route",
+                "distance.admin_distance",
+                "distance.ospf",
+                "distribute_list.acls",
+                "distribute_list.prefix",
+                "distribute_list.route_map",
+                "domain_id",
+                "domain_tag",
+                "event_log",
+                "help",
+                "ignore",
+                "interface_id",
+                "ispf",
+                "limit",
+                "local_rib_criteria",
+                "log_adjacency_changes",
+                "max_lsa",
+                "max_metric",
+                "maximum_paths",
+                "mpls.ldp",
+                "mpls.traffic_eng",
+                "neighbor",
+                "network",
+                "nsf.cisco",
+                "nsf.ietf",
+                "passive_interface",
+                "prefix_suppression",
+                "priority",
+                "queue_depth.hello",
+                "queue_depth.update",
+                "router_id",
+                "shutdown",
+                "summary_address",
+                "timers.throttle.lsa",
+                "timers.throttle.spf",
+                "traffic_share",
+                "ttl_security",
+            ]
+
             self.compare(parsers, want, have)
             self._areas_compare(want, have)
             if want.get("passive_interfaces"):
@@ -185,8 +177,7 @@ class Ospfv2(ResourceModule):
         for name, entry in iteritems(wantd):
             h_item = haved.pop(name, {})
             if entry != h_item and name == "filter_list":
-                filter_list_entry = {}
-                filter_list_entry["area_id"] = wantd["area_id"]
+                filter_list_entry = {"area_id": wantd["area_id"]}
                 if h_item:
                     li_diff = [
                         item
@@ -214,84 +205,81 @@ class Ospfv2(ResourceModule):
                             "interface": {each: each},
                             "set_interface": v["set_interface"],
                         }
-                        self.compare(
-                            parsers=parsers,
-                            want={"passive_interfaces": temp},
-                            have=dict(),
-                        )
+                        self.compare(parsers=parsers, want={"passive_interfaces": temp}, have={})
                     else:
                         h_interface_name.pop(each)
             elif not h_pi:
-                if k == "interface":
+                if k == "default":
+                    self.compare(
+                        parsers=parsers,
+                        want={"passive_interfaces": {"default": True}},
+                        have={},
+                    )
+
+                elif k == "interface":
                     for each in v["name"]:
                         temp = {
                             "interface": {each: each},
                             "set_interface": v["set_interface"],
                         }
-                        self.compare(
-                            parsers=parsers,
-                            want={"passive_interfaces": temp},
-                            have=dict(),
-                        )
-                elif k == "default":
-                    self.compare(
-                        parsers=parsers,
-                        want={"passive_interfaces": {"default": True}},
-                        have=dict(),
-                    )
+                        self.compare(parsers=parsers, want={"passive_interfaces": temp}, have={})
             else:
                 h_pi.pop(k)
-        if (self.state == "replaced" or self.state == "overridden") and h_pi:
-            if h_pi.get("default") or h_pi.get("interface"):
-                for k, v in iteritems(h_pi):
-                    if k == "interface":
-                        for each in v["name"]:
-                            temp = {
-                                "interface": {each: each},
-                                "set_interface": not (v["set_interface"]),
-                            }
-                            self.compare(
-                                parsers=parsers,
-                                want={"passive_interface": temp},
-                                have=dict(),
-                            )
-                    elif k == "default":
-                        self.compare(
-                            parsers=parsers,
-                            want=dict(),
-                            have={"passive_interface": {"default": True}},
-                        )
+        if (
+            self.state in ["replaced", "overridden"]
+            and h_pi
+            and (h_pi.get("default") or h_pi.get("interface"))
+        ):
+            for k, v in iteritems(h_pi):
+                if k == "default":
+                    self.compare(
+                        parsers=parsers,
+                        want={},
+                        have={"passive_interface": {"default": True}},
+                    )
+
+                elif k == "interface":
+                    for each in v["name"]:
+                        temp = {
+                            "interface": {each: each},
+                            "set_interface": not (v["set_interface"]),
+                        }
+                        self.compare(parsers=parsers, want={"passive_interface": temp}, have={})
 
     def list_to_dict(self, param):
-        if param:
-            for _pid, proc in iteritems(param):
-                for area in proc.get("areas", []):
-                    ranges = {}
-                    for entry in area.get("ranges", []):
-                        ranges.update({entry["address"]: entry})
-                    if bool(ranges):
-                        area["ranges"] = ranges
-                    filter_list = {}
-                    for entry in area.get("filter_list", []):
-                        filter_list.update({entry["direction"]: entry})
-                    if bool(filter_list):
-                        area["filter_list"] = filter_list
-                temp = {}
-                for entry in proc.get("areas", []):
-                    temp.update({entry["area_id"]: entry})
-                proc["areas"] = temp
-                if proc.get("distribute_list"):
-                    if "acls" in proc.get("distribute_list"):
-                        temp = {}
-                        for entry in proc["distribute_list"].get("acls", []):
-                            temp.update({entry["name"]: entry})
-                        proc["distribute_list"]["acls"] = temp
-                if proc.get("passive_interfaces") and proc[
+        if not param:
+            return
+        for _pid, proc in iteritems(param):
+            for area in proc.get("areas", []):
+                ranges = {entry["address"]: entry for entry in area.get("ranges", [])}
+                if bool(ranges):
+                    area["ranges"] = ranges
+                filter_list = {
+                    entry["direction"]: entry
+                    for entry in area.get("filter_list", [])
+                }
+
+                if bool(filter_list):
+                    area["filter_list"] = filter_list
+            temp = {entry["area_id"]: entry for entry in proc.get("areas", [])}
+            proc["areas"] = temp
+            if proc.get("distribute_list") and "acls" in proc.get(
+                "distribute_list"
+            ):
+                temp = {
+                    entry["name"]: entry
+                    for entry in proc["distribute_list"].get("acls", [])
+                }
+
+                proc["distribute_list"]["acls"] = temp
+            if proc.get("passive_interfaces") and proc[
                     "passive_interfaces"
                 ].get("interface"):
-                    temp = {}
+                temp = {
+                    entry: entry
                     for entry in proc["passive_interfaces"]["interface"].get(
                         "name", []
-                    ):
-                        temp.update({entry: entry})
-                    proc["passive_interfaces"]["interface"]["name"] = temp
+                    )
+                }
+
+                proc["passive_interfaces"]["interface"]["name"] = temp

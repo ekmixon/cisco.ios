@@ -72,10 +72,7 @@ from ansible_collections.cisco.ios.plugins.module_utils.network.ios.ios import (
 
 def has_lldp(module):
     output = run_commands(module, ["show lldp"])
-    is_lldp_enable = False
-    if len(output) > 0 and "LLDP is not enabled" not in output[0]:
-        is_lldp_enable = True
-    return is_lldp_enable
+    return len(output) > 0 and "LLDP is not enabled" not in output[0]
 
 
 def main():
@@ -87,13 +84,12 @@ def main():
             choices=["present", "absent", "enabled", "disabled"],
         )
     )
-    argument_spec.update(ios_argument_spec)
+    argument_spec |= ios_argument_spec
     module = AnsibleModule(
         argument_spec=argument_spec, supports_check_mode=True
     )
-    warnings = list()
     result = {"changed": False}
-    if warnings:
+    if warnings := []:
         result["warnings"] = warnings
     HAS_LLDP = has_lldp(module)
     commands = []

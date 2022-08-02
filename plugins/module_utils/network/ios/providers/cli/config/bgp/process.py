@@ -42,25 +42,24 @@ REDISTRIBUTE_PROTOCOLS = [
 @register_provider("ios", "ios_bgp")
 class Provider(CliProvider):
     def render(self, config=None):
-        commands = list()
+        commands = []
 
         existing_as = None
         if config:
-            match = re.search(r"router bgp (\d+)", config, re.M)
-            if match:
-                existing_as = match.group(1)
+            if match := re.search(r"router bgp (\d+)", config, re.M):
+                existing_as = match[1]
 
         operation = self.params["operation"]
 
         context = None
         if self.params["config"]:
-            context = "router bgp %s" % self.get_value("config.bgp_as")
+            context = f'router bgp {self.get_value("config.bgp_as")}'
 
         if operation == "delete":
             if existing_as:
-                commands.append("no router bgp %s" % existing_as)
+                commands.append(f"no router bgp {existing_as}")
             elif context:
-                commands.append("no %s" % context)
+                commands.append(f"no {context}")
 
         else:
             self._validate_input(config)
@@ -68,22 +67,20 @@ class Provider(CliProvider):
                 if existing_as and int(existing_as) != self.get_value(
                     "config.bgp_as"
                 ):
-                    commands.append("no router bgp %s" % existing_as)
+                    commands.append(f"no router bgp {existing_as}")
                     config = None
 
             elif operation == "override":
                 if existing_as:
-                    commands.append("no router bgp %s" % existing_as)
+                    commands.append(f"no router bgp {existing_as}")
                 config = None
 
-            context_commands = list()
+            context_commands = []
 
             for key, value in iteritems(self.get_value("config")):
                 if value is not None:
-                    meth = getattr(self, "_render_%s" % key, None)
-                    if meth:
-                        resp = meth(config)
-                        if resp:
+                    if meth := getattr(self, f"_render_{key}", None):
+                        if resp := meth(config):
                             context_commands.extend(to_list(resp))
 
             if context and context_commands:
@@ -93,7 +90,7 @@ class Provider(CliProvider):
         return commands
 
     def _render_router_id(self, config=None):
-        cmd = "bgp router-id %s" % self.get_value("config.router_id")
+        cmd = f'bgp router-id {self.get_value("config.router_id")}'
         if not config or cmd not in config:
             return cmd
 
@@ -105,33 +102,34 @@ class Provider(CliProvider):
                 return cmd
         elif log_neighbor_changes is False:
             if config and cmd in config:
-                return "no %s" % cmd
+                return f"no {cmd}"
 
     def _render_networks(self, config=None):
-        commands = list()
-        safe_list = list()
+        commands = []
+        safe_list = []
 
         for entry in self.get_value("config.networks"):
             network = entry["prefix"]
-            cmd = "network %s" % network
+            cmd = f"network {network}"
             if entry["masklen"] and entry["masklen"] not in (24, 16, 8):
-                cmd += " mask %s" % to_netmask(entry["masklen"])
-                network += " mask %s" % to_netmask(entry["masklen"])
+                cmd += f' mask {to_netmask(entry["masklen"])}'
+                network += f' mask {to_netmask(entry["masklen"])}'
 
             if entry["route_map"]:
-                cmd += " route-map %s" % entry["route_map"]
-                network += " route-map %s" % entry["route_map"]
+                cmd += f' route-map {entry["route_map"]}'
+                network += f' route-map {entry["route_map"]}'
 
             safe_list.append(network)
 
             if not config or cmd not in config:
                 commands.append(cmd)
 
-        if self.params["operation"] == "replace":
-            if config:
-                matches = re.findall(r"network (.*)", config, re.M)
-                for entry in set(matches).difference(safe_list):
-                    commands.append("no network %s" % entry)
+        if self.params["operation"] == "replace" and config:
+            matches = re.findall(r"network (.*)", config, re.M)
+            commands.extend(
+                f"no network {entry}"
+                for entry in set(matches).difference(safe_list)
+            )
 
         return commands
 
@@ -158,9 +156,9 @@ class Provider(CliProvider):
                 for item in address_family:
                     if item["networks"]:
                         raise ValueError(
-                            "operation is replace but provided both root level network(s) and network(s) under %s %s address family"
-                            % (item["afi"], item["safi"])
+                            f'operation is replace but provided both root level network(s) and network(s) under {item["afi"]} {item["safi"]} address family'
                         )
+
 
             if root_networks and config and device_has_AF(config):
                 raise ValueError(

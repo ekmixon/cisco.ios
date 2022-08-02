@@ -425,14 +425,16 @@ def main():
     network_spec = {
         "prefix": dict(required=True),
         "masklen": dict(type="int"),
-        "route_map": dict(),
+        "route_map": {},
     }
+
     redistribute_spec = {
         "protocol": dict(choices=REDISTRIBUTE_PROTOCOLS, required=True),
-        "id": dict(),
+        "id": {},
         "metric": dict(type="int"),
-        "route_map": dict(),
+        "route_map": {},
     }
+
     timer_spec = {
         "keepalive": dict(type="int", required=True),
         "holdtime": dict(type="int", required=True),
@@ -442,14 +444,15 @@ def main():
         "neighbor": dict(required=True),
         "remote_as": dict(type="int", required=True),
         "local_as": dict(type="int"),
-        "update_source": dict(),
+        "update_source": {},
         "password": dict(no_log=True),
         "enabled": dict(type="bool"),
-        "description": dict(),
+        "description": {},
         "ebgp_multihop": dict(type="int"),
         "timers": dict(type="dict", options=timer_spec),
-        "peer_group": dict(),
+        "peer_group": {},
     }
+
     af_neighbor_spec = {
         "neighbor": dict(required=True),
         "activate": dict(type="bool"),
@@ -460,9 +463,10 @@ def main():
         "route_reflector_client": dict(type="bool"),
         "route_server_client": dict(type="bool"),
         "maximum_prefix": dict(type="int"),
-        "prefix_list_in": dict(),
-        "prefix_list_out": dict(),
+        "prefix_list_in": {},
+        "prefix_list_out": {},
     }
+
     address_family_spec = {
         "afi": dict(choices=["ipv4", "ipv6"], required=True),
         "safi": dict(
@@ -481,7 +485,7 @@ def main():
     }
     config_spec = {
         "bgp_as": dict(type="int", required=True),
-        "router_id": dict(),
+        "router_id": {},
         "log_neighbor_changes": dict(type="bool"),
         "neighbors": dict(type="list", elements="dict", options=neighbor_spec),
         "address_family": dict(
@@ -489,6 +493,7 @@ def main():
         ),
         "networks": dict(type="list", elements="dict", options=network_spec),
     }
+
     argument_spec = {
         "config": dict(type="dict", options=config_spec),
         "operation": dict(

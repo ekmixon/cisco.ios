@@ -296,34 +296,26 @@ def validate_param_values(module, obj, param=None):
         param = module.params
     for key in obj:
         # validate the param value (if validator func exists)
-        validator = globals().get("validate_%s" % key)
+        validator = globals().get(f"validate_{key}")
         if callable(validator):
             validator(param.get(key), module)
 
 
 def parse_shutdown(configobj, name):
-    cfg = configobj["interface %s" % name]
+    cfg = configobj[f"interface {name}"]
     cfg = "\n".join(cfg.children)
-    match = re.search("^shutdown", cfg, re.M)
-    if match:
-        return True
-    else:
-        return False
+    return bool(match := re.search("^shutdown", cfg, re.M))
 
 
 def parse_config_argument(configobj, name, arg=None):
-    cfg = configobj["interface %s" % name]
+    cfg = configobj[f"interface {name}"]
     cfg = "\n".join(cfg.children)
-    match = re.search("%s (.+)$" % arg, cfg, re.M)
-    if match:
-        return match.group(1)
+    if match := re.search(f"{arg} (.+)$", cfg, re.M):
+        return match[1]
 
 
 def search_obj_in_list(name, lst):
-    for o in lst:
-        if o["name"] == name:
-            return o
-    return None
+    return next((o for o in lst if o["name"] == name), None)
 
 
 def add_command_to_interface(interface, cmd, commands):
@@ -337,8 +329,8 @@ def map_config_to_obj(module):
     configobj = NetworkConfig(indent=1, contents=config)
     match = re.findall("^interface (\\S+)", config, re.M)
     if not match:
-        return list()
-    instances = list()
+        return []
+    instances = []
     for item in set(match):
         obj = {
             "name": item,
@@ -348,27 +340,24 @@ def map_config_to_obj(module):
             "speed": parse_config_argument(configobj, item, "speed"),
             "duplex": parse_config_argument(configobj, item, "duplex"),
             "mtu": parse_config_argument(configobj, item, "mtu"),
-            "disable": True if parse_shutdown(configobj, item) else False,
+            "disable": bool(parse_shutdown(configobj, item)),
             "state": "present",
         }
+
         instances.append(obj)
     return instances
 
 
 def map_params_to_obj(module):
     obj = []
-    aggregate = module.params.get("aggregate")
-    if aggregate:
+    if aggregate := module.params.get("aggregate"):
         for item in aggregate:
             for key in item:
                 if item.get(key) is None:
                     item[key] = module.params[key]
             validate_param_values(module, item, item)
             d = item.copy()
-            if d["enabled"]:
-                d["disable"] = False
-            else:
-                d["disable"] = True
+            d["disable"] = not d["enabled"]
             obj.append(d)
     else:
         params = {
@@ -384,16 +373,13 @@ def map_params_to_obj(module):
             "neighbors": module.params["neighbors"],
         }
         validate_param_values(module, params)
-        if module.params["enabled"]:
-            params.update({"disable": False})
-        else:
-            params.update({"disable": True})
+        params["disable"] = not module.params["enabled"]
         obj.append(params)
     return obj
 
 
 def map_obj_to_commands(updates):
-    commands = list()
+    commands = []
     want, have = updates
     args = "speed", "description", "duplex", "mtu"
     for w in want:
@@ -401,18 +387,17 @@ def map_obj_to_commands(updates):
         disable = w["disable"]
         state = w["state"]
         obj_in_have = search_obj_in_list(name, have)
-        interface = "interface " + name
+        interface = f"interface {name}"
         if state == "absent" and obj_in_have:
-            commands.append("no " + interface)
+            commands.append(f"no {interface}")
         elif state in ("present", "up", "down"):
             if obj_in_have:
                 for item in args:
                     candidate = w.get(item)
                     running = obj_in_have.get(item)
-                    if candidate != running:
-                        if candidate:
-                            cmd = item + " " + str(candidate)
-                            add_command_to_interface(interface, cmd, commands)
+                    if candidate != running and candidate:
+                        cmd = f"{item} {str(candidate)}"
+                        add_command_to_interface(interface, cmd, commands)
                 if disable and not obj_in_have.get("disable", False):
                     add_command_to_interface(interface, "shutdown", commands)
                 elif not disable and obj_in_have.get("disable", False):
@@ -422,9 +407,8 @@ def map_obj_to_commands(updates):
             else:
                 commands.append(interface)
                 for item in args:
-                    value = w.get(item)
-                    if value:
-                        commands.append(item + " " + str(value))
+                    if value := w.get(item):
+                        commands.append(f"{item} {str(value)}")
                 if disable:
                     commands.append("no shutdown")
     return commands
@@ -448,7 +432,7 @@ def check_declarative_intent_params(module, want, result):
             continue
         if result["changed"]:
             sleep(w["delay"])
-        command = "show interfaces %s" % w["name"]
+        command = f'show interfaces {w["name"]}'
         rc, out, err = exec_command(module, command)
         if rc != 0:
             module.fail_json(
@@ -460,29 +444,29 @@ def check_declarative_intent_params(module, want, result):
             match = re.search("%s (\\w+)" % "line protocol is", out, re.M)
             have_state = None
             if match:
-                have_state = match.group(1)
+                have_state = match[1]
             if have_state is None or not conditional(
                 want_state, have_state.strip()
             ):
-                failed_conditions.append("state " + "eq(%s)" % want_state)
+                failed_conditions.append("state " + f"eq({want_state})")
         if want_tx_rate:
             match = re.search("%s (\\d+)" % "output rate", out, re.M)
             have_tx_rate = None
             if match:
-                have_tx_rate = match.group(1)
+                have_tx_rate = match[1]
             if have_tx_rate is None or not conditional(
                 want_tx_rate, have_tx_rate.strip(), cast=int
             ):
-                failed_conditions.append("tx_rate " + want_tx_rate)
+                failed_conditions.append(f"tx_rate {want_tx_rate}")
         if want_rx_rate:
             match = re.search("%s (\\d+)" % "input rate", out, re.M)
             have_rx_rate = None
             if match:
-                have_rx_rate = match.group(1)
+                have_rx_rate = match[1]
             if have_rx_rate is None or not conditional(
                 want_rx_rate, have_rx_rate.strip(), cast=int
             ):
-                failed_conditions.append("rx_rate " + want_rx_rate)
+                failed_conditions.append(f"rx_rate {want_rx_rate}")
         if want_neighbors:
             have_host = []
             have_port = []
@@ -535,41 +519,47 @@ def check_declarative_intent_params(module, want, result):
                 host = item.get("host")
                 port = item.get("port")
                 if host and host not in have_host:
-                    failed_conditions.append("host " + host)
+                    failed_conditions.append(f"host {host}")
                 if port and port not in have_port:
-                    failed_conditions.append("port " + port)
+                    failed_conditions.append(f"port {port}")
     return failed_conditions
 
 
 def main():
     """ main entry point for module execution
     """
-    neighbors_spec = dict(host=dict(), port=dict())
+    neighbors_spec = dict(host={}, port={})
     element_spec = dict(
-        name=dict(),
-        description=dict(),
-        speed=dict(),
-        mtu=dict(),
+        name={},
+        description={},
+        speed={},
+        mtu={},
         duplex=dict(choices=["full", "half", "auto"]),
         enabled=dict(default=True, type="bool"),
-        tx_rate=dict(),
-        rx_rate=dict(),
+        tx_rate={},
+        rx_rate={},
         neighbors=dict(type="list", elements="dict", options=neighbors_spec),
         delay=dict(default=10, type="int"),
         state=dict(
             default="present", choices=["present", "absent", "up", "down"]
         ),
     )
+
     aggregate_spec = deepcopy(element_spec)
     aggregate_spec["name"] = dict(required=True)
 
     # remove default in aggregate spec, to handle common arguments
     remove_default_spec(aggregate_spec)
-    argument_spec = dict(
-        aggregate=dict(type="list", elements="dict", options=aggregate_spec)
+    argument_spec = (
+        dict(
+            aggregate=dict(
+                type="list", elements="dict", options=aggregate_spec
+            )
+        )
+        | element_spec
     )
-    argument_spec.update(element_spec)
-    argument_spec.update(ios_argument_spec)
+
+    argument_spec |= ios_argument_spec
     required_one_of = [["name", "aggregate"]]
     mutually_exclusive = [["name", "aggregate"]]
     module = AnsibleModule(
@@ -578,9 +568,8 @@ def main():
         mutually_exclusive=mutually_exclusive,
         supports_check_mode=True,
     )
-    warnings = list()
     result = {"changed": False}
-    if warnings:
+    if warnings := []:
         result["warnings"] = warnings
     want = map_params_to_obj(module)
     have = map_config_to_obj(module)
@@ -590,8 +579,9 @@ def main():
         if not module.check_mode:
             load_config(module, commands)
         result["changed"] = True
-    failed_conditions = check_declarative_intent_params(module, want, result)
-    if failed_conditions:
+    if failed_conditions := check_declarative_intent_params(
+        module, want, result
+    ):
         msg = "One or more conditional statements have not been satisfied"
         module.fail_json(msg=msg, failed_conditions=failed_conditions)
     module.exit_json(**result)

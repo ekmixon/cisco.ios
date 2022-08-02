@@ -63,9 +63,7 @@ class Lag_interfaces(ConfigBase):
         lag_interfaces_facts = facts["ansible_network_resources"].get(
             "lag_interfaces"
         )
-        if not lag_interfaces_facts:
-            return []
-        return lag_interfaces_facts
+        return lag_interfaces_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -74,8 +72,8 @@ class Lag_interfaces(ConfigBase):
         :returns: The result from module execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_lag_interfaces_facts = self.get_lag_interfaces_facts()
@@ -188,9 +186,7 @@ class Lag_interfaces(ConfigBase):
                             have_dict = self.filter_dict_having_none_value(
                                 interface, each
                             )
-                            commands.extend(
-                                self._clear_config(dict(), have_dict)
-                            )
+                            commands.extend(self._clear_config({}, have_dict))
                             commands.extend(
                                 self._set_config(interface, each, module)
                             )
@@ -198,7 +194,7 @@ class Lag_interfaces(ConfigBase):
                         have_dict = self.filter_dict_having_none_value(
                             interface, each
                         )
-                        commands.extend(self._clear_config(dict(), have_dict))
+                        commands.extend(self._clear_config({}, have_dict))
                         commands.extend(
                             self._set_config(interface, each, module)
                         )
@@ -235,9 +231,7 @@ class Lag_interfaces(ConfigBase):
                                 have_dict = self.filter_dict_having_none_value(
                                     interface, each
                                 )
-                                commands.extend(
-                                    self._clear_config(dict(), have_dict)
-                                )
+                                commands.extend(self._clear_config({}, have_dict))
                                 commands.extend(
                                     self._set_config(interface, each, module)
                                 )
@@ -245,9 +239,7 @@ class Lag_interfaces(ConfigBase):
                             have_dict = self.filter_dict_having_none_value(
                                 interface, each
                             )
-                            commands.extend(
-                                self._clear_config(dict(), have_dict)
-                            )
+                            commands.extend(self._clear_config({}, have_dict))
                             commands.extend(
                                 self._set_config(interface, each, module)
                             )
@@ -277,9 +269,7 @@ class Lag_interfaces(ConfigBase):
                         break
                 else:
                     if self.state == "rendered":
-                        commands.extend(
-                            self._set_config(interface, dict(), module)
-                        )
+                        commands.extend(self._set_config(interface, {}, module))
                     continue
                 commands.extend(self._set_config(interface, each, module))
 
@@ -304,32 +294,30 @@ class Lag_interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
         else:
             for each in have:
-                commands.extend(self._clear_config(dict(), each))
+                commands.extend(self._clear_config({}, each))
 
         return commands
 
     def filter_dict_having_none_value(self, want, have):
-        # Generate dict with have dict value which is None in want dict
-        test_dict = dict()
-        test_key_dict = dict()
-        test_dict["name"] = want.get("name")
+        test_key_dict = {}
+        test_dict = {"name": want.get("name")}
         for k, v in iteritems(want):
             if isinstance(v, dict):
                 for key, value in iteritems(v):
                     if value is None:
                         dict_val = have.get(k).get(key)
-                        test_key_dict.update({key: dict_val})
-                    test_dict.update({k: test_key_dict})
+                        test_key_dict[key] = dict_val
+                    test_dict[k] = test_key_dict
             if v is None:
                 val = have.get(k)
-                test_dict.update({k: val})
+                test_dict[k] = val
         return test_dict
 
     def remove_command_from_config_list(self, interface, cmd, commands):
         # To delete the passed config
         if interface not in commands:
             commands.append(interface)
-        commands.append("no %s" % cmd)
+        commands.append(f"no {cmd}")
         return commands
 
     def add_command_to_config_list(self, interface, cmd, commands):
@@ -352,18 +340,17 @@ class Lag_interfaces(ConfigBase):
 
         # To get the channel-id from lag port-channel name
         lag_config = dict(diff).get("members")
-        channel_name = re.search(r"(\d+)", want.get("name"))
-        if channel_name:
+        if channel_name := re.search(r"(\d+)", want.get("name")):
             channel_id = channel_name.group()
         else:
             module.fail_json(msg="Lag Interface Name is not correct!")
         if lag_config:
             for each in lag_config:
                 each = dict(each)
-                each_interface = "interface {0}".format(each.get("member"))
                 if have.get("name") == want["members"][0][
                     "member"
                 ] or want.get("name").lower().startswith("po"):
+                    each_interface = "interface {0}".format(each.get("member"))
                     if each.get("mode"):
                         cmd = "channel-group {0} mode {1}".format(
                             channel_id, each.get("mode")

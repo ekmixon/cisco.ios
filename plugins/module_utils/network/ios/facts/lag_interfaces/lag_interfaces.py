@@ -39,10 +39,7 @@ class Lag_interfacesFacts(object):
         self.argument_spec = Lag_interfacesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -64,18 +61,19 @@ class Lag_interfacesFacts(object):
         config = ("\n" + data).split("\ninterface ")
         for conf in config:
             if conf:
-                obj = self.render_config(self.generated_spec, conf)
-                if obj:
+                if obj := self.render_config(self.generated_spec, conf):
                     if not obj.get("members"):
                         obj.update({"members": []})
                     objs.append(obj)
 
         # for appending members configured with same channel-group
         for each in range(len(objs)):
-            if each < (len(objs) - 1):
-                if objs[each]["name"] == objs[each + 1]["name"]:
-                    objs[each]["members"].append(objs[each + 1]["members"][0])
-                    del objs[each + 1]
+            if (
+                each < (len(objs) - 1)
+                and objs[each]["name"] == objs[each + 1]["name"]
+            ):
+                objs[each]["members"].append(objs[each + 1]["members"][0])
+                del objs[each + 1]
         facts = {}
 
         if objs:
@@ -102,7 +100,7 @@ class Lag_interfacesFacts(object):
         """
         config = deepcopy(spec)
         match = re.search(r"^(\S+)", conf)
-        intf = match.group(1)
+        intf = match[1]
 
         if get_interface_type(intf) == "unknown":
             return {}
@@ -117,10 +115,10 @@ class Lag_interfacesFacts(object):
                 config["name"] = "Port-channel{0}".format(str(id))
                 if "mode" in channel_group:
                     mode = channel_group[2]
-                    member_config.update({"mode": mode})
+                    member_config["mode"] = mode
                 if "link" in channel_group:
                     link = channel_group[2]
-                    member_config.update({"link": link})
+                    member_config["link"] = link
             if member_config.get("mode") or member_config.get("link"):
                 member_config["member"] = normalize_interface(intf)
                 config["members"].append(member_config)

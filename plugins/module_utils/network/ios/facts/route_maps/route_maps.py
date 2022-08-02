@@ -37,10 +37,7 @@ class Route_mapsFacts(object):
         self.argument_spec = Route_mapsArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -71,27 +68,27 @@ class Route_mapsFacts(object):
         final_objs = []
         if objs:
             for k, v in iteritems(objs):
-                temp_dict = {}
-                temp_dict["entries"] = []
+                temp_dict = {"entries": []}
                 for key, val in iteritems(v):
                     if key == "route_map":
-                        temp_dict.update({"route_map": val})
+                        temp_dict["route_map"] = val
                         continue
                     if val.get("entries"):
-                        if val["entries"].get("match"):
-                            if val["entries"]["match"].get("ip"):
-                                for k_ip, v_ip in iteritems(
-                                    val["entries"]["match"]["ip"]
-                                ):
-                                    if v_ip.get("acls"):
-                                        if "src-pfx" in v_ip["acls"]:
-                                            v_ip["acls"].pop(
-                                                v_ip["acls"].index("src-pfx")
-                                            )
-                                        elif "dest-pfx" in v_ip["acls"]:
-                                            v_ip["acls"].pop(
-                                                v_ip["acls"].index("dest-pfx")
-                                            )
+                        if val["entries"].get("match") and val["entries"][
+                            "match"
+                        ].get("ip"):
+                            for k_ip, v_ip in iteritems(
+                                val["entries"]["match"]["ip"]
+                            ):
+                                if v_ip.get("acls"):
+                                    if "src-pfx" in v_ip["acls"]:
+                                        v_ip["acls"].pop(
+                                            v_ip["acls"].index("src-pfx")
+                                        )
+                                    elif "dest-pfx" in v_ip["acls"]:
+                                        v_ip["acls"].pop(
+                                            v_ip["acls"].index("dest-pfx")
+                                        )
                         temp_dict["entries"].append(val["entries"])
                 temp_dict["entries"] = sorted(
                     temp_dict["entries"], key=lambda k, sk="sequence": k[sk]

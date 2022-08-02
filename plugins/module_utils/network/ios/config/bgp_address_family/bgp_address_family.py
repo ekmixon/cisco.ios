@@ -72,15 +72,8 @@ class Bgp_AddressFamily(ResourceModule):
         """ Generate configuration commands to send based on
             want, have and desired state.
         """
-        if self.want:
-            wantd = {self.want["as_number"]: self.want}
-        else:
-            wantd = dict()
-        if self.have:
-            haved = {self.have["as_number"]: self.have}
-        else:
-            haved = dict()
-
+        wantd = {self.want["as_number"]: self.want} if self.want else {}
+        haved = {self.have["as_number"]: self.have} if self.have else {}
         for each in wantd, haved:
             self.list_to_dict(each)
 
@@ -95,23 +88,20 @@ class Bgp_AddressFamily(ResourceModule):
         if self.state == "deleted":
             as_number = None
             if wantd:
-                temp = dict()
+                temp = {}
                 for key, val in iteritems(haved):
                     as_number = key
                     if wantd.get(key):
                         for k, v in iteritems(val.get("address_family")):
                             w = wantd[key].get("address_family")
                             if k in w:
-                                temp.update({k: v})
+                                temp[k] = v
                     val["address_family"] = temp
             elif haved:
                 as_number = list(haved)[0]
-                temp = {}
-                for k, v in iteritems(haved):
-                    if not wantd:
-                        temp.update({k: v})
+                temp = {k: v for k, v in iteritems(haved) if not wantd}
                 haved = temp
-            wantd = dict()
+            wantd = {}
             for k, have in iteritems(haved):
                 if k not in wantd:
                     self._compare(want=wantd, have=have, as_number=as_number)
@@ -119,19 +109,14 @@ class Bgp_AddressFamily(ResourceModule):
         # remove superfluous config for overridden
         if self.state == "overridden":
             for key, have in iteritems(haved):
-                if wantd.get(key):
-                    if have.get("address_family"):
-                        for k, v in iteritems(have.get("address_family")):
-                            w = wantd[key].get("address_family")
-                            if k not in w:
-                                self._compare(
-                                    want=dict(),
-                                    have={"address_family": {k: v}},
-                                    as_number=key,
-                                )
+                if wantd.get(key) and have.get("address_family"):
+                    for k, v in iteritems(have.get("address_family")):
+                        w = wantd[key].get("address_family")
+                        if k not in w:
+                            self._compare(want={}, have={"address_family": {k: v}}, as_number=key)
 
         for k, want in iteritems(wantd):
-            self._compare(want=want, have=haved.pop(k, dict()), as_number=k)
+            self._compare(want=want, have=haved.pop(k, {}), as_number=k)
 
     def _compare(self, want, have, as_number):
         """Leverages the base class `compare()` method and
@@ -148,24 +133,19 @@ class Bgp_AddressFamily(ResourceModule):
             self.commands.insert(0, "router bgp {0}".format(as_number))
 
     def _compare_af(self, want, have):
-        w = want.get("address_family", dict())
-        h = have.get("address_family", dict())
+        w = want.get("address_family", {})
+        h = have.get("address_family", {})
 
         for key, val in iteritems(w):
             cmd_len = len(self.commands)
-            if h.get(key):
-                h_key = h.get(key)
-            else:
-                h_key = dict()
+            h_key = h.get(key) or {}
             if val != h_key:
                 self._aggregate_address_af_config_compare(val, have=h_key)
                 self._bgp_af_config_compare(val, have=h_key)
                 self._compare_neighbor(val, have=h_key)
                 self._compare_network(val, have=h_key)
                 self._compare_snmp(val, have=h_key)
-                self.compare(
-                    parsers=self.parsers, want=val, have=h.pop(key, dict())
-                )
+                self.compare(parsers=self.parsers, want=val, have=h.pop(key, {}))
             if cmd_len != len(self.commands):
                 af_cmd = "address-family {afi}".format(**val)
                 if val.get("safi"):
@@ -179,10 +159,7 @@ class Bgp_AddressFamily(ResourceModule):
     def _aggregate_address_af_config_compare(self, want, have):
         parsers = ["aggregate_address"]
         w_aggregate_address = want.get("aggregate_address", {})
-        if have:
-            h_aggregate_address = have.get("aggregate_address", {})
-        else:
-            h_aggregate_address = {}
+        h_aggregate_address = have.get("aggregate_address", {}) if have else {}
         for key, val in iteritems(w_aggregate_address):
             if h_aggregate_address and h_aggregate_address.get(key):
                 self.compare(
@@ -191,26 +168,14 @@ class Bgp_AddressFamily(ResourceModule):
                     have={"aggregate_address": h_aggregate_address.pop(key)},
                 )
             else:
-                self.compare(
-                    parsers=parsers,
-                    want={"aggregate_address": val},
-                    have=dict(),
-                )
-        if self.state == "replaced" or self.state == "overridden":
+                self.compare(parsers=parsers, want={"aggregate_address": val}, have={})
+        if self.state in ["replaced", "overridden"]:
             if h_aggregate_address:
                 for key, val in iteritems(h_aggregate_address):
-                    self.compare(
-                        parsers=parsers,
-                        want=dict(),
-                        have={"aggregate_address": val},
-                    )
+                    self.compare(parsers=parsers, want={}, have={"aggregate_address": val})
             elif have.get("aggregate_address"):
                 for key, val in iteritems(have.pop("aggregate_address")):
-                    self.compare(
-                        parsers=parsers,
-                        want=dict(),
-                        have={"aggregate_address": val},
-                    )
+                    self.compare(parsers=parsers, want={}, have={"aggregate_address": val})
 
     def _bgp_af_config_compare(self, want, have):
         parsers = [
@@ -219,11 +184,8 @@ class Bgp_AddressFamily(ResourceModule):
             "bgp.config",
             "bgp.slow_peer",
         ]
-        w_bgp = want.get("bgp", dict())
-        if have:
-            h_bgp = have.get("bgp", dict())
-        else:
-            h_bgp = dict()
+        w_bgp = want.get("bgp", {})
+        h_bgp = have.get("bgp", {}) if have else {}
         for key, val in iteritems(w_bgp):
             if h_bgp and h_bgp.get(key):
                 self.compare(
@@ -232,20 +194,14 @@ class Bgp_AddressFamily(ResourceModule):
                     have={"bgp": {key: h_bgp.pop(key)}},
                 )
             else:
-                self.compare(
-                    parsers=parsers, want={"bgp": {key: val}}, have=dict()
-                )
-        if self.state == "replaced" or self.state == "overridden":
+                self.compare(parsers=parsers, want={"bgp": {key: val}}, have={})
+        if self.state in ["replaced", "overridden"]:
             if h_bgp:
                 for key, val in iteritems(h_bgp):
-                    self.compare(
-                        parsers=parsers, want=dict(), have={"bgp": {key: val}}
-                    )
+                    self.compare(parsers=parsers, want={}, have={"bgp": {key: val}})
             elif have.get("bgp"):
                 for key, val in iteritems(have.pop("bgp")):
-                    self.compare(
-                        parsers=parsers, want=dict(), have={"bgp": {key: val}}
-                    )
+                    self.compare(parsers=parsers, want={}, have={"bgp": {key: val}})
 
     def _compare_neighbor(self, want, have):
         parsers = [
@@ -257,15 +213,11 @@ class Bgp_AddressFamily(ResourceModule):
         neighbor_key = ["address", "ipv6_address", "tag"]
         deprecated = False
         w = want.get("neighbor", {}) if want else {}
-        if have:
-            h = have.get("neighbor", {})
-        else:
-            h = {}
-
+        h = have.get("neighbor", {}) if have else {}
         def _handle_neighbor_deprecated(w_key, h_key, want, have):
             # function to handle idempotency, when deprecated params are present
             # in want and their equivalent supported param are present inside have
-            keys = w_key + "s"
+            keys = f"{w_key}s"
             if have[h_key].get(keys):
                 temp_have = have[h_key][keys]
                 if want["name"] in temp_have:
@@ -283,7 +235,7 @@ class Bgp_AddressFamily(ResourceModule):
                     0
                 ]
                 for k, v in iteritems(val):
-                    if k == "route_map" or k == "prefix_list":
+                    if k in ["route_map", "prefix_list"]:
                         k, v, deprecated = _handle_neighbor_deprecated(
                             k, key, v, h
                         )
@@ -331,8 +283,9 @@ class Bgp_AddressFamily(ResourceModule):
                                         k: v,
                                     }
                                 },
-                                have=dict(),
+                                have={},
                             )
+
                         elif (
                             k in ["prefix_lists", "route_maps"]
                             and not deprecated
@@ -346,12 +299,11 @@ class Bgp_AddressFamily(ResourceModule):
                                             k: v_param,
                                         }
                                     },
-                                    have=dict(),
+                                    have={},
                                 )
+
             else:
-                self.compare(
-                    parsers=parsers, want={"neighbor": val}, have=dict()
-                )
+                self.compare(parsers=parsers, want={"neighbor": val}, have={})
                 for param in ["prefix_lists", "route_maps"]:
                     if param in val:
                         for k_param, v_param in iteritems(val[param]):
@@ -363,14 +315,13 @@ class Bgp_AddressFamily(ResourceModule):
                                         param: v_param,
                                     }
                                 },
-                                have=dict(),
+                                have={},
                             )
+
                         val.pop(param)
-        if self.state == "replaced" or self.state == "overridden":
+        if self.state in ["replaced", "overridden"]:
             for key, val in iteritems(h):
-                self.compare(
-                    parsers=parsers, want=dict(), have={"neighbor": val}
-                )
+                self.compare(parsers=parsers, want={}, have={"neighbor": val})
             count = 0
             remote = None
             activate = None
@@ -380,17 +331,23 @@ class Bgp_AddressFamily(ResourceModule):
                 if "no" in each and "activate" in each:
                     activate = count
                 count += 1
-            if activate and activate > remote:
-                if count > 0 or "activate" in self.commands[activate]:
-                    self.commands.append(self.commands.pop(activate))
-            if remote and activate > remote:
-                if count > 0 or "remote-as" in self.commands[remote]:
-                    self.commands.append(self.commands.pop(remote))
+            if (
+                activate
+                and activate > remote
+                and (count > 0 or "activate" in self.commands[activate])
+            ):
+                self.commands.append(self.commands.pop(activate))
+            if (
+                remote
+                and activate > remote
+                and (count > 0 or "remote-as" in self.commands[remote])
+            ):
+                self.commands.append(self.commands.pop(remote))
 
     def _compare_network(self, want, have):
         parsers = ["network"]
-        w = want.get("network", dict())
-        h = have.get("network", dict())
+        w = want.get("network", {})
+        h = have.get("network", {})
         for key, val in iteritems(w):
             if h and h.get(key):
                 h_network = h.pop(key)
@@ -401,19 +358,15 @@ class Bgp_AddressFamily(ResourceModule):
                         have={"network": val},
                     )
             else:
-                self.compare(
-                    parsers=parsers, want={"network": val}, have=dict()
-                )
-        if self.state == "replaced" or self.state == "overridden":
+                self.compare(parsers=parsers, want={"network": val}, have={})
+        if self.state in ["replaced", "overridden"]:
             for key, val in iteritems(h):
-                self.compare(
-                    parsers=parsers, want=dict(), have={"network": val}
-                )
+                self.compare(parsers=parsers, want={}, have={"network": val})
 
     def _compare_snmp(self, want, have):
         parsers = ["snmp"]
-        w = want.get("snmp", dict())
-        h = have.get("snmp", dict())
+        w = want.get("snmp", {})
+        h = have.get("snmp", {})
         if w:
             for key, val in iteritems(w["context"]):
                 if h:
@@ -434,24 +387,23 @@ class Bgp_AddressFamily(ResourceModule):
                                 }
                             },
                         )
-                elif key == "community" or key == "user":
+                elif key in ["community", "user"]:
                     self.compare(
                         parsers=parsers,
-                        want={
-                            "snmp": {key: val, "name": w["context"]["name"]}
-                        },
-                        have=dict(),
+                        want={"snmp": {key: val, "name": w["context"]["name"]}},
+                        have={},
                     )
+
         elif h and self.state == "replaced" or self.state == "overridden":
             for key, val in iteritems(h):
                 self.compare(
                     parsers=parsers,
-                    want=dict(),
+                    want={},
                     have={"snmp": {key: val, "name": h["context"]["name"]}},
                 )
 
     def _delete_af(self, have):
-        h = have.get("address_family", dict())
+        h = have.get("address_family", {})
         for key, val in iteritems(h):
             if "safi" in val and "vrf" in val:
                 cmd = "no address-family {afi} {safi} vrf {vrf}".format(**val)
@@ -462,67 +414,55 @@ class Bgp_AddressFamily(ResourceModule):
             self.commands.append(cmd)
 
     def list_to_dict(self, param):
-        if param:
-            for key, val in iteritems(param):
-                if val.get("address_family"):
-                    temp = {}
-                    for each in val.get("address_family", []):
-                        temp.update(
-                            {
-                                each["afi"]
-                                + "_"
-                                + each.get("safi", "")
-                                + "_"
-                                + each.get("vrf", ""): each
-                            }
-                        )
-                    val["address_family"] = temp
-                    self.list_to_dict(val["address_family"])
-                if "aggregate_address" in val:
-                    temp = {}
-                    for each in val["aggregate_address"]:
-                        temp.update({each["address"]: each})
-                    val["aggregate_address"] = temp
-                if "bgp" in val and "slow_peer" in val["bgp"]:
-                    temp = {}
-                    for each in val["bgp"]["slow_peer"]:
-                        temp.update({list(each)[0]: each[list(each)[0]]})
-                    val["bgp"]["slow_peer"] = temp
-                if "neighbor" in val:
-                    for each in val["neighbor"]:
-                        if each.get("prefix_lists"):
-                            temp = {}
-                            for every in each["prefix_lists"]:
-                                temp.update({every["name"]: every})
-                            each["prefix_lists"] = temp
-                        if each.get("route_maps"):
-                            temp = {}
-                            for every in each["route_maps"]:
-                                temp.update({every["name"]: every})
-                            each["route_maps"] = temp
-                        if each.get("slow_peer"):
-                            each["slow_peer"] = {
-                                list(every)[0]: every[list(every)[0]]
-                                for every in each["slow_peer"]
-                            }
-                    val["neighbor"] = {
-                        each.get("address")
-                        or each.get("ipv6_address")
-                        or each.get("tag"): each
-                        for each in val.get("neighbor", [])
-                    }
-                if "network" in val:
-                    temp = {}
-                    for each in val.get("network", []):
-                        temp.update({each["address"]: each})
-                    val["network"] = temp
+        if not param:
+            return
+        for key, val in iteritems(param):
+            if val.get("address_family"):
+                temp = {
+                    each["afi"]
+                    + "_"
+                    + each.get("safi", "")
+                    + "_"
+                    + each.get("vrf", ""): each
+                    for each in val.get("address_family", [])
+                }
+
+                val["address_family"] = temp
+                self.list_to_dict(val["address_family"])
+            if "aggregate_address" in val:
+                temp = {each["address"]: each for each in val["aggregate_address"]}
+                val["aggregate_address"] = temp
+            if "bgp" in val and "slow_peer" in val["bgp"]:
+                temp = {list(each)[0]: each[list(each)[0]] for each in val["bgp"]["slow_peer"]}
+                val["bgp"]["slow_peer"] = temp
+            if "neighbor" in val:
+                for each in val["neighbor"]:
+                    if each.get("prefix_lists"):
+                        temp = {every["name"]: every for every in each["prefix_lists"]}
+                        each["prefix_lists"] = temp
+                    if each.get("route_maps"):
+                        temp = {every["name"]: every for every in each["route_maps"]}
+                        each["route_maps"] = temp
+                    if each.get("slow_peer"):
+                        each["slow_peer"] = {
+                            list(every)[0]: every[list(every)[0]]
+                            for every in each["slow_peer"]
+                        }
+                val["neighbor"] = {
+                    each.get("address")
+                    or each.get("ipv6_address")
+                    or each.get("tag"): each
+                    for each in val.get("neighbor", [])
+                }
+            if "network" in val:
+                temp = {each["address"]: each for each in val.get("network", [])}
+                val["network"] = temp
 
     def handle_deprecated(self, want_to_validate):
-        if want_to_validate.get("next_hop_self") and want_to_validate.get(
-            "nexthop_self"
-        ):
-            del want_to_validate["next_hop_self"]
-        elif want_to_validate.get("next_hop_self"):
-            del want_to_validate["next_hop_self"]
-            want_to_validate["nexthop_self"] = {"all": True}
+        if want_to_validate.get("next_hop_self"):
+            if want_to_validate.get("nexthop_self"):
+                del want_to_validate["next_hop_self"]
+            else:
+                del want_to_validate["next_hop_self"]
+                want_to_validate["nexthop_self"] = {"all": True}
         return want_to_validate

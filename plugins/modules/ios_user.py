@@ -321,14 +321,12 @@ from ansible.module_utils.six import iteritems
 
 def validate_privilege(value, module):
     if value and not 1 <= value <= 15:
-        module.fail_json(
-            msg="privilege must be between 1 and 15, got %s" % value
-        )
+        module.fail_json(msg=f"privilege must be between 1 and 15, got {value}")
 
 
 def user_del_cmd(username):
     return {
-        "command": "no username %s" % username,
+        "command": f"no username {username}",
         "prompt": "This operation will remove all username related configurations with same name",
         "answer": "y",
         "newline": False,
@@ -341,23 +339,19 @@ def sshkey_fingerprint(sshkey):
     # we calculate this fingerprint here
     if not sshkey:
         return None
-    if " " in sshkey:
-        # ssh-rsa AAA...== comment
-        keyparts = sshkey.split(" ")
-        keyparts[1] = (
-            hashlib.md5(base64.b64decode(keyparts[1])).hexdigest().upper()
-        )
-        return " ".join(keyparts)
-    else:
+    if " " not in sshkey:
         # just the key, assume rsa type
-        return (
-            "ssh-rsa %s"
-            % hashlib.md5(base64.b64decode(sshkey)).hexdigest().upper()
-        )
+        return f"ssh-rsa {hashlib.md5(base64.b64decode(sshkey)).hexdigest().upper()}"
+    # ssh-rsa AAA...== comment
+    keyparts = sshkey.split(" ")
+    keyparts[1] = (
+        hashlib.md5(base64.b64decode(keyparts[1])).hexdigest().upper()
+    )
+    return " ".join(keyparts)
 
 
 def map_obj_to_commands(updates, module):
-    commands = list()
+    commands = []
     update_password = module.params["update_password"]
     password_type = module.params["password_type"]
 
@@ -365,23 +359,23 @@ def map_obj_to_commands(updates, module):
         return want.get(x) and want.get(x) != have.get(x)
 
     def add(command, want, x):
-        command.append("username %s %s" % (want["name"], x))
+        command.append(f'username {want["name"]} {x}')
 
     def add_hashed_password(command, want, x):
         command.append(
-            "username %s secret %s %s"
-            % (want["name"], x.get("type"), x.get("value"))
+            f'username {want["name"]} secret {x.get("type")} {x.get("value")}'
         )
+
 
     def add_ssh(command, want, x=None):
         command.append("ip ssh pubkey-chain")
         if x:
-            command.append("username %s" % want["name"])
+            command.append(f'username {want["name"]}')
             for item in x:
-                command.append("key-hash %s" % item)
+                command.append(f"key-hash {item}")
             command.append("exit")
         else:
-            command.append("no username %s" % want["name"])
+            command.append(f'no username {want["name"]}')
         command.append("exit")
 
     for update in updates:
@@ -392,27 +386,24 @@ def map_obj_to_commands(updates, module):
             else:
                 commands.append(user_del_cmd(want["name"]))
         if needs_update(want, have, "view"):
-            add(commands, want, "view %s" % want["view"])
+            add(commands, want, f'view {want["view"]}')
         if needs_update(want, have, "privilege"):
-            add(commands, want, "privilege %s" % want["privilege"])
+            add(commands, want, f'privilege {want["privilege"]}')
         if needs_update(want, have, "sshkey"):
             add_ssh(commands, want, want["sshkey"])
-        if needs_update(want, have, "configured_password"):
-            if update_password == "always" or not have:
-                if (
-                    have
-                    and have["password_type"]
-                    and password_type != have["password_type"]
-                ):
-                    module.fail_json(
-                        msg="Can not have both a user password and a user secret."
-                        + " Please choose one or the other."
-                    )
-                add(
-                    commands,
-                    want,
-                    "%s %s" % (password_type, want["configured_password"]),
+        if needs_update(want, have, "configured_password") and (
+            update_password == "always" or not have
+        ):
+            if (
+                have
+                and have["password_type"]
+                and password_type != have["password_type"]
+            ):
+                module.fail_json(
+                    msg="Can not have both a user password and a user secret."
+                    + " Please choose one or the other."
                 )
+            add(commands, want, f'{password_type} {want["configured_password"]}')
         if needs_update(want, have, "hashed_password"):
             add_hashed_password(commands, want, want["hashed_password"])
         if needs_update(want, have, "nopassword"):
@@ -424,9 +415,8 @@ def map_obj_to_commands(updates, module):
 
 
 def parse_view(data):
-    match = re.search("view (\\S+)", data, re.M)
-    if match:
-        return match.group(1)
+    if match := re.search("view (\\S+)", data, re.M):
+        return match[1]
 
 
 def parse_sshkey(data, user):
@@ -434,35 +424,34 @@ def parse_sshkey(data, user):
     sshcfg = re.search(sshregex, data, re.M)
     key_list = []
     if sshcfg:
-        match = re.findall(
+        if match := re.findall(
             "key-hash (\\S+ \\S+(?: .+)?)$", sshcfg.group(), re.M
-        )
-        if match:
+        ):
             key_list = match
     return key_list
 
 
 def parse_privilege(data):
-    match = re.search("privilege (\\S+)", data, re.M)
-    if match:
-        return int(match.group(1))
+    if match := re.search("privilege (\\S+)", data, re.M):
+        return int(match[1])
 
 
 def parse_password_type(data):
-    type = None
-    if data and data.split()[-3] in ["password", "secret"]:
-        type = data.split()[-3]
-    return type
+    return (
+        data.split()[-3]
+        if data and data.split()[-3] in ["password", "secret"]
+        else None
+    )
 
 
 def map_config_to_obj(module):
     data = get_config(module, flags=["| section username"])
     match = re.findall("(?:^(?:u|\\s{2}u))sername (\\S+)", data, re.M)
     if not match:
-        return list()
-    instances = list()
+        return []
+    instances = []
     for user in set(match):
-        regex = "username %s .+$" % user
+        regex = f"username {user} .+$"
         cfg = re.findall(regex, data, re.M)
         cfg = "\n".join(cfg)
         obj = {
@@ -491,23 +480,15 @@ def get_param_value(key, item, module):
         type_checker(item[key])
         value = item[key]
     # validate the param value (if validator func exists)
-    validator = globals().get("validate_%s" % key)
+    validator = globals().get(f"validate_{key}")
     if all((value, validator)):
         validator(value, module)
     return value
 
 
 def map_params_to_obj(module):
-    users = module.params["aggregate"]
-    if not users:
-        if not module.params["name"] and module.params["purge"]:
-            return list()
-        elif not module.params["name"]:
-            module.fail_json(msg="username is required")
-        else:
-            aggregate = [{"name": module.params["name"]}]
-    else:
-        aggregate = list()
+    if users := module.params["aggregate"]:
+        aggregate = []
         for item in users:
             if not isinstance(item, dict):
                 aggregate.append({"name": item})
@@ -515,7 +496,13 @@ def map_params_to_obj(module):
                 module.fail_json(msg="name is required")
             else:
                 aggregate.append(item)
-    objects = list()
+    elif not module.params["name"] and module.params["purge"]:
+        return []
+    elif not module.params["name"]:
+        module.fail_json(msg="username is required")
+    else:
+        aggregate = [{"name": module.params["name"]}]
+    objects = []
     for item in aggregate:
         get_value = partial(get_param_value, item=item, module=module)
         item["configured_password"] = get_value("configured_password")
@@ -532,21 +519,23 @@ def map_params_to_obj(module):
 def render_key_list(ssh_keys):
     key_list = []
     if ssh_keys:
-        for item in ssh_keys:
-            key_list.append(sshkey_fingerprint(item))
+        key_list.extend(sshkey_fingerprint(item) for item in ssh_keys)
     return key_list
 
 
 def update_objects(want, have):
-    updates = list()
+    updates = []
     for entry in want:
         item = next((i for i in have if i["name"] == entry["name"]), None)
         if all((item is None, entry["state"] == "present")):
             updates.append((entry, {}))
         elif item:
-            for key, value in iteritems(entry):
-                if value and value != item[key]:
-                    updates.append((entry, item))
+            updates.extend(
+                (entry, item)
+                for key, value in iteritems(entry)
+                if value and value != item[key]
+            )
+
     return updates
 
 
@@ -558,7 +547,7 @@ def main():
         value=dict(no_log=True, required=True),
     )
     element_spec = dict(
-        name=dict(),
+        name={},
         configured_password=dict(no_log=True),
         hashed_password=dict(
             no_log=True, type="dict", options=hashed_password_spec
@@ -573,21 +562,25 @@ def main():
         sshkey=dict(type="list", elements="str", no_log=False),
         state=dict(default="present", choices=["present", "absent"]),
     )
+
     aggregate_spec = deepcopy(element_spec)
     aggregate_spec["name"] = dict(required=True)
     # remove default in aggregate spec, to handle common arguments
     remove_default_spec(aggregate_spec)
-    argument_spec = dict(
-        aggregate=dict(
-            type="list",
-            elements="dict",
-            options=aggregate_spec,
-            aliases=["users", "collection"],
-        ),
-        purge=dict(type="bool", default=False),
+    argument_spec = (
+        dict(
+            aggregate=dict(
+                type="list",
+                elements="dict",
+                options=aggregate_spec,
+                aliases=["users", "collection"],
+            ),
+            purge=dict(type="bool", default=False),
+        )
+        | element_spec
     )
-    argument_spec.update(element_spec)
-    argument_spec.update(ios_argument_spec)
+
+    argument_spec |= ios_argument_spec
     mutually_exclusive = [
         ("name", "aggregate"),
         ("nopassword", "hashed_password", "configured_password"),
@@ -597,8 +590,7 @@ def main():
         mutually_exclusive=mutually_exclusive,
         supports_check_mode=True,
     )
-    warnings = list()
-    result = {"changed": False, "warnings": warnings}
+    warnings = []
     want = map_params_to_obj(module)
     have = map_config_to_obj(module)
     commands = map_obj_to_commands(update_objects(want, have), module)
@@ -608,7 +600,7 @@ def main():
         for item in set(have_users).difference(want_users):
             if item != "admin":
                 commands.append(user_del_cmd(item))
-    result["commands"] = commands
+    result = {"changed": False, "warnings": warnings, "commands": commands}
     if commands:
         if not module.check_mode:
             load_config(module, commands)

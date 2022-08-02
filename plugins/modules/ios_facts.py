@@ -239,7 +239,7 @@ def main():
         )
     result = Facts(module).get_facts()
     additional_facts, additional_warnings = result
-    ansible_facts.update(additional_facts)
+    ansible_facts |= additional_facts
     warnings.extend(additional_warnings)
     module.exit_json(ansible_facts=ansible_facts, warnings=warnings)
 

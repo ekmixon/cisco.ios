@@ -48,16 +48,12 @@ class Ospfv3Facts(object):
         temp_pid = None
         for line in net_template_obj._lines:
             for parser in net_template_obj._tmplt.PARSERS:
-                cap = re.match(parser["getval"], line)
-                if cap:
+                if cap := re.match(parser["getval"], line):
                     capdict = cap.groupdict()
-                    temp = {}
-                    for k, v in iteritems(capdict):
-                        if v is not None:
-                            temp.update({k: v})
+                    temp = {k: v for k, v in iteritems(capdict) if v is not None}
                     capdict = temp
                     if "address-family" in line:
-                        capdict.update({"id": temp_pid})
+                        capdict["id"] = temp_pid
                     if (
                         "manet" in line
                         and "pid" not in shared
@@ -98,13 +94,11 @@ class Ospfv3Facts(object):
                     if temp_pid == each.get("exit")["pid"]:
                         temp.append(temp_dict)
                         pid_addr_family_dict[temp_pid] = temp
-                        temp_dict = dict()
                     else:
                         temp_pid = each.get("exit")["pid"]
                         pid_addr_family_dict[temp_pid] = [temp_dict]
-                        temp = []
-                        temp.append(temp_dict)
-                        temp_dict = dict()
+                        temp = [temp_dict]
+                    temp_dict = {}
                 elif each.get("manet") and temp_dict.get("manet"):
                     for k, v in iteritems(each.get("manet")):
                         if k in temp_dict.get("manet"):
@@ -135,8 +129,7 @@ class Ospfv3Facts(object):
             module=self._module,
         )
         current = self.parse(ospfv3_parser)
-        address_family = self.parse_for_address_family(current)
-        if address_family:
+        if address_family := self.parse_for_address_family(current):
             for k, v in iteritems(current["processes"]):
                 temp = address_family.pop(k)
                 v.update({"address_family": temp})

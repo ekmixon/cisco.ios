@@ -37,10 +37,7 @@ class Ospf_InterfacesFacts(object):
         self.argument_spec = Ospf_InterfacesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -59,7 +56,6 @@ class Ospf_InterfacesFacts(object):
         :rtype: dictionary
         :returns: facts
         """
-        facts = {}
         objs = []
 
         if not data:
@@ -91,7 +87,7 @@ class Ospf_InterfacesFacts(object):
             )
         )
 
-        facts["ospf_interfaces"] = params["config"]
+        facts = {"ospf_interfaces": params["config"]}
         ansible_facts["ansible_network_resources"].update(facts)
 
         return ansible_facts

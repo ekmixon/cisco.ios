@@ -69,10 +69,7 @@ class L2_Interfaces(ConfigBase):
         l2_interfaces_facts = facts["ansible_network_resources"].get(
             "l2_interfaces"
         )
-        if not l2_interfaces_facts:
-            return []
-
-        return l2_interfaces_facts
+        return l2_interfaces_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -165,7 +162,7 @@ class L2_Interfaces(ConfigBase):
             commands = self._state_overridden(want, have, self._module)
         elif self.state == "deleted":
             commands = self._state_deleted(want, have)
-        elif self.state == "merged" or self.state == "rendered":
+        elif self.state in ["merged", "rendered"]:
             commands = self._state_merged(want, have, self._module)
         elif self.state == "replaced":
             commands = self._state_replaced(want, have, self._module)
@@ -190,7 +187,7 @@ class L2_Interfaces(ConfigBase):
             else:
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each, module))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -219,7 +216,7 @@ class L2_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(**kwargs))
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each, module))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -242,7 +239,7 @@ class L2_Interfaces(ConfigBase):
                     break
             else:
                 # configuring non-existing interface
-                commands.extend(self._set_config(interface, dict(), module))
+                commands.extend(self._set_config(interface, {}, module))
                 continue
             commands.extend(self._set_config(interface, each, module))
 
@@ -270,7 +267,7 @@ class L2_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
         else:
             for each in have:
-                want = dict()
+                want = {}
                 commands.extend(self._clear_config(want, each))
 
         return commands
@@ -279,16 +276,15 @@ class L2_Interfaces(ConfigBase):
         # Function to check if the VLAN range passed is Valid
         for each in vlan:
             vlan_range = each.split("-")
-            if len(vlan_range) > 1:
-                if int(vlan_range[0]) < int(vlan_range[1]):
-                    return True
-                else:
-                    module.fail_json(
-                        msg="Command rejected: Bad VLAN list - end of range not larger than the"
-                        " start of range!"
-                    )
-            else:
+            if len(vlan_range) <= 1:
                 return True
+            if int(vlan_range[0]) < int(vlan_range[1]):
+                return True
+            else:
+                module.fail_json(
+                    msg="Command rejected: Bad VLAN list - end of range not larger than the"
+                    " start of range!"
+                )
 
     def _expand_vlan_range_if_any(self, param_type, vlan):
         temp = []
@@ -384,8 +380,7 @@ class L2_Interfaces(ConfigBase):
                                 set(have_allowed_vlans)
                             )
                             allowed_vlans = list(diff) if diff else tuple()
-                    allowed_vlans = ",".join(allowed_vlans)
-                    if allowed_vlans:
+                    if allowed_vlans := ",".join(allowed_vlans):
                         trunk_cmd = (
                             self.trunk_cmds["allowed_vlans_add"]
                             if self.state == "merged" and diff
@@ -408,8 +403,7 @@ class L2_Interfaces(ConfigBase):
                                 set(have_pruning_vlans)
                             )
                             pruning_vlans = list(diff) if diff else tuple()
-                    pruning_vlans = ",".join(pruning_vlans)
-                    if pruning_vlans:
+                    if pruning_vlans := ",".join(pruning_vlans):
                         trunk_cmd = (
                             self.trunk_cmds["pruning_vlans_add"]
                             if self.state == "merged" and diff

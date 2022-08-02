@@ -204,7 +204,7 @@ from ansible_collections.cisco.ios.plugins.module_utils.network.ios.ios import (
 
 
 def map_obj_to_commands(want, have):
-    commands = list()
+    commands = []
     for w in want:
         state = w["state"]
         del w["state"]
@@ -229,8 +229,7 @@ def map_obj_to_commands(want, have):
         command = "ip route"
         prefix = w["prefix"]
         mask = w["mask"]
-        vrf = w.get("vrf")
-        if vrf:
+        if vrf := w.get("vrf"):
             command = " ".join((command, "vrf", vrf, prefix, mask))
         else:
             command = " ".join((command, prefix, mask))
@@ -250,7 +249,7 @@ def map_obj_to_commands(want, have):
                 else:
                     command = " ".join((command, w.get(key)))
         if state == "absent" and h:
-            commands.append("no %s" % command)
+            commands.append(f"no {command}")
         elif state == "present" and not h:
             commands.append(command)
     return commands
@@ -270,7 +269,7 @@ def map_config_to_obj(module):
             del splitted_line[:2]  # Removes the words ip route
         prefix = splitted_line[0]
         mask = splitted_line[1]
-        route.update({"prefix": prefix, "mask": mask, "admin_distance": "1"})
+        route |= {"prefix": prefix, "mask": mask, "admin_distance": "1"}
         next_word = None
         for word in splitted_line[2:]:
             if next_word:
@@ -302,14 +301,13 @@ def map_params_to_obj(module, required_together=None):
         "tag",
     ]
     obj = []
-    aggregate = module.params.get("aggregate")
-    if aggregate:
+    if aggregate := module.params.get("aggregate"):
         for item in aggregate:
             route = item.copy()
             for key in keys:
                 if route.get(key) is None:
                     route[key] = module.params.get(key)
-            route = dict((k, v) for k, v in route.items() if v is not None)
+            route = {k: v for k, v in route.items() if v is not None}
             try:
                 check_required_together(required_together, route)
             except TypeError as exc:
@@ -320,10 +318,12 @@ def map_params_to_obj(module, required_together=None):
             check_required_together(required_together, module.params)
         except TypeError as exc:
             module.fail_json(to_text(exc))
-        route = dict()
-        for key in keys:
-            if module.params.get(key) is not None:
-                route[key] = module.params.get(key)
+        route = {
+            key: module.params.get(key)
+            for key in keys
+            if module.params.get(key) is not None
+        }
+
         obj.append(route)
     return obj
 
@@ -347,11 +347,16 @@ def main():
     aggregate_spec["prefix"] = dict(required=True)
     # remove default in aggregate spec, to handle common arguments
     remove_default_spec(aggregate_spec)
-    argument_spec = dict(
-        aggregate=dict(type="list", elements="dict", options=aggregate_spec)
+    argument_spec = (
+        dict(
+            aggregate=dict(
+                type="list", elements="dict", options=aggregate_spec
+            )
+        )
+        | element_spec
     )
-    argument_spec.update(element_spec)
-    argument_spec.update(ios_argument_spec)
+
+    argument_spec |= ios_argument_spec
     required_one_of = [["aggregate", "prefix"]]
     required_together = [["prefix", "mask"]]
     mutually_exclusive = [["aggregate", "prefix"]]
@@ -361,9 +366,8 @@ def main():
         mutually_exclusive=mutually_exclusive,
         supports_check_mode=True,
     )
-    warnings = list()
     result = {"changed": False}
-    if warnings:
+    if warnings := []:
         result["warnings"] = warnings
     want = map_params_to_obj(module, required_together=required_together)
     have = map_config_to_obj(module)

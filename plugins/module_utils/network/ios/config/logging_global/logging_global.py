@@ -94,15 +94,8 @@ class Logging_global(ResourceModule):
         """ Generate configuration commands to send based on
             want, have and desired state.
         """
-        if self.want:
-            wantd = self.list_to_dict(self.want, "want")
-        else:
-            wantd = dict()
-        if self.have:
-            haved = self.list_to_dict(self.have, "have")
-        else:
-            haved = dict()
-
+        wantd = self.list_to_dict(self.want, "want") if self.want else {}
+        haved = self.list_to_dict(self.have, "have") if self.have else {}
         # if state is merged, merge want onto have and then compare
         if self.state == "merged":
             wantd = dict_merge(haved, wantd)
@@ -123,9 +116,8 @@ class Logging_global(ResourceModule):
         # replaced state for handling list type attrs
         if self.state == "replaced":
             for k, have in iteritems(haved):
-                if list(have.keys())[0] in self.exclude["want"]:
-                    if k not in wantd:
-                        self._compare(want={}, have=have)
+                if list(have.keys())[0] in self.exclude["want"] and k not in wantd:
+                    self._compare(want={}, have=have)
 
         for k, want in iteritems(wantd):
             self._compare(want=want, have=haved.pop(k, {}))
@@ -152,67 +144,53 @@ class Logging_global(ResourceModule):
 
         _temp_param = {}
         for element, val in iteritems(param):
-            if element == "message_counter":
-                _temp = {}
-                for ctr in val:
-                    _temp.update({ctr: {"message_counter": ctr}})
-                _temp_param.update(_temp)
-                self.exclude[op].append("message_counter")
             if element == "discriminator":
-                _temp = {}
-                for ctr in val:
-                    _temp.update(
-                        {
-                            self.trim_whitespace("discriminator_" + ctr): {
-                                "discriminator": ctr
-                            }
-                        }
-                    )
-                _temp_param.update(_temp)
+                _temp = {
+                    self.trim_whitespace(f"discriminator_{ctr}"): {
+                        "discriminator": ctr
+                    }
+                    for ctr in val
+                }
+
+                _temp_param |= _temp
                 self.exclude[op].append("discriminator")
-            if element == "snmp_trap":
-                _temp = {}
-                for ctr in val:
-                    _temp.update(
-                        {
-                            self.trim_whitespace("snmp_trap_" + ctr): {
-                                "snmp_trap": ctr
-                            }
-                        }
-                    )
-                _temp_param.update(_temp)
-                self.exclude[op].append("snmp_trap")
-            if element == "source_interface":
-                _temp = {}
-                for interface in val:
-                    _temp.update(
-                        {
-                            interface.get("interface"): {
-                                "source_interface": interface
-                            }
-                        }
-                    )
-                _temp_param.update(_temp)
-                self.exclude[op].append("source_interface")
-            if element == "filter":
-                _temp = {}
-                for url in val:
-                    _temp.update({url.get("url"): {"filter": url}})
+            elif element == "filter":
+                _temp = {url.get("url"): {"filter": url} for url in val}
                 _temp_param.update(_temp)
                 self.exclude[op].append("filter")
-            if element == "hosts":
+            elif element == "hosts":
                 _temp = {}
                 for host in val:
                     if host.get("hostname"):
-                        _temp.update({host.get("hostname"): {"hosts": host}})
+                        _temp[host.get("hostname")] = {"hosts": host}
                     elif host.get("ipv6"):
-                        _temp.update({host.get("ipv6"): {"hosts": host}})
+                        _temp[host.get("ipv6")] = {"hosts": host}
                 _temp_param.update(_temp)
                 self.exclude[op].append("hosts")
 
+            elif element == "message_counter":
+                _temp = {ctr: {"message_counter": ctr} for ctr in val}
+                _temp_param.update(_temp)
+                self.exclude[op].append("message_counter")
+            elif element == "snmp_trap":
+                _temp = {
+                    self.trim_whitespace(f"snmp_trap_{ctr}"): {"snmp_trap": ctr}
+                    for ctr in val
+                }
+
+                _temp_param.update(_temp)
+                self.exclude[op].append("snmp_trap")
+            elif element == "source_interface":
+                _temp = {
+                    interface.get("interface"): {"source_interface": interface}
+                    for interface in val
+                }
+
+                _temp_param.update(_temp)
+                self.exclude[op].append("source_interface")
         for k, v in iteritems(param):
             if k not in self.exclude.get(op):
-                _temp_param.update({k: {k: v}})
+                _temp_param[k] = {k: v}
 
         param = _temp_param
         return param

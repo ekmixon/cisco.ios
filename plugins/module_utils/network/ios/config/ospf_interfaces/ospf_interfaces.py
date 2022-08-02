@@ -67,12 +67,12 @@ class Ospf_Interfaces(ResourceModule):
         haved = {}
         if self.want:
             for entry in self.want:
-                wantd.update({(entry["name"]): entry})
+                wantd[entry["name"]] = entry
         else:
             wantd = {}
         if self.have:
             for entry in self.have:
-                haved.update({(entry["name"]): entry})
+                haved[entry["name"]] = entry
         else:
             haved = {}
 
@@ -82,10 +82,7 @@ class Ospf_Interfaces(ResourceModule):
 
         # if state is deleted, empty out wantd and set haved to wantd
         if self.state == "deleted":
-            temp = {}
-            for k, v in iteritems(haved):
-                if k in wantd or not wantd:
-                    temp.update({k: v})
+            temp = {k: v for k, v in iteritems(haved) if k in wantd or not wantd}
             haved = temp
             wantd = {}
 
@@ -158,12 +155,11 @@ class Ospf_Interfaces(ResourceModule):
                             )
                         have_elements -= 1
                 else:
-                    h_each = dict()
+                    h_each = {}
                     self.compare(parsers=parsers, want=each, have=h_each)
                     set_want = False
                 if set_want:
-                    self.compare(parsers=parsers, want=each, have=dict())
-        if self.state in ["overridden", "deleted"]:
-            if have.get("address_family"):
-                for each in have["address_family"]:
-                    self.compare(parsers=parsers, want=dict(), have=each)
+                    self.compare(parsers=parsers, want=each, have={})
+        if self.state in ["overridden", "deleted"] and have.get("address_family"):
+            for each in have["address_family"]:
+                self.compare(parsers=parsers, want={}, have=each)

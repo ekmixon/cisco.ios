@@ -19,29 +19,30 @@ def _tmplt_ospfv3_cmd(process):
 
 def _tmplt_ospf_adjacency_cmd(config_data):
     if "adjacency" in config_data:
-        command = "adjacency stagger"
-        if "none" in config_data["adjacency"]:
-            command += " none"
-        else:
-            command += " {min_adjacency}".format(**config_data["adjacency"])
+        command = "adjacency stagger" + (
+            " none"
+            if "none" in config_data["adjacency"]
+            else " {min_adjacency}".format(**config_data["adjacency"])
+        )
+
         if "max_adjacency" in config_data["adjacency"]:
             command += " {min_adjacency}".format(**config_data["adjacency"])
         return command
 
 
 def _tmplt_ospf_address_family_cmd(config_data):
-    if "address_family" in config_data:
-        command = []
-        # for config_data in config_data["address_family"]:
-        cmd = "address-family {afi}".format(**config_data["address_family"])
-        if config_data["address_family"].get("unicast"):
-            cmd += " unicast"
-        if config_data["address_family"].get("vrf"):
-            cmd += " vrf {vrf}".format(**config_data["address_family"])
-        command.append(cmd)
-        if command:
-            command.insert(len(command), "exit-address-family")
-        return command
+    if "address_family" not in config_data:
+        return
+    # for config_data in config_data["address_family"]:
+    cmd = "address-family {afi}".format(**config_data["address_family"])
+    if config_data["address_family"].get("unicast"):
+        cmd += " unicast"
+    if config_data["address_family"].get("vrf"):
+        cmd += " vrf {vrf}".format(**config_data["address_family"])
+    command = [cmd]
+    if command:
+        command.insert(len(command), "exit-address-family")
+    return command
 
 
 def _tmplt_address_family_graceful_restart(config_data):
@@ -76,63 +77,61 @@ def _tmplt_ospf_area_filter(config_data):
 
 
 def _tmplt_ospf_area_nssa(config_data):
-    if "nssa" in config_data:
-        command = "area {area_id} nssa".format(**config_data)
-        if "default_information_originate" in config_data["nssa"]:
-            command += " default-information-originate"
-            if (
-                "metric"
-                in config_data["nssa"]["default_information_originate"]
-            ):
-                command += " metric {metric}".format(
-                    **config_data["nssa"]["default_information_originate"]
-                )
-            if (
-                "metric_type"
-                in config_data["nssa"]["default_information_originate"]
-            ):
-                command += " metric-type {metric_type}".format(
-                    **config_data["nssa"]["default_information_originate"]
-                )
-            if (
-                "nssa_only"
-                in config_data["nssa"]["default_information_originate"]
-            ):
-                command += " nssa-only"
-        if config_data["nssa"].get("no_ext_capability"):
-            command += " no-ext-capability"
-        if config_data["nssa"].get("no_redistribution"):
-            command += " no-redistribution"
-        if config_data["nssa"].get("no_summary"):
-            command += " no-summary"
-        return command
+    if "nssa" not in config_data:
+        return
+    command = "area {area_id} nssa".format(**config_data)
+    if "default_information_originate" in config_data["nssa"]:
+        command += " default-information-originate"
+        if (
+            "metric"
+            in config_data["nssa"]["default_information_originate"]
+        ):
+            command += " metric {metric}".format(
+                **config_data["nssa"]["default_information_originate"]
+            )
+        if (
+            "metric_type"
+            in config_data["nssa"]["default_information_originate"]
+        ):
+            command += " metric-type {metric_type}".format(
+                **config_data["nssa"]["default_information_originate"]
+            )
+        if (
+            "nssa_only"
+            in config_data["nssa"]["default_information_originate"]
+        ):
+            command += " nssa-only"
+    if config_data["nssa"].get("no_ext_capability"):
+        command += " no-ext-capability"
+    if config_data["nssa"].get("no_redistribution"):
+        command += " no-redistribution"
+    if config_data["nssa"].get("no_summary"):
+        command += " no-summary"
+    return command
 
 
 def _tmplt_ospf_area_nssa_translate(config_data):
     if "nssa" in config_data and "translate" in config_data["nssa"]:
-        command = "area {area_id} nssa".format(**config_data)
-        if "translate" in config_data["nssa"]:
-            command += " translate type7 {translate}".format(
-                **config_data["nssa"]
-            )
-        return command
+        return "area {area_id} nssa".format(
+            **config_data
+        ) + " translate type7 {translate}".format(**config_data["nssa"])
 
 
 def _tmplt_ospf_area_ranges(config_data):
-    if "ranges" in config_data:
-        commands = []
-        for k, v in iteritems(config_data["ranges"]):
-            cmd = "area {area_id} range".format(**config_data)
-            temp_cmd = " {address} {netmask}".format(**v)
-            if "advertise" in v:
-                temp_cmd += " advertise"
-            elif "not_advertise" in v:
-                temp_cmd += " not-advertise"
-            if "cost" in v:
-                temp_cmd += " cost {cost}".format(**v)
-            cmd += temp_cmd
-            commands.append(cmd)
-        return commands
+    if "ranges" not in config_data:
+        return
+    commands = []
+    for k, v in iteritems(config_data["ranges"]):
+        temp_cmd = " {address} {netmask}".format(**v)
+        if "advertise" in v:
+            temp_cmd += " advertise"
+        elif "not_advertise" in v:
+            temp_cmd += " not-advertise"
+        if "cost" in v:
+            temp_cmd += " cost {cost}".format(**v)
+        cmd = "area {area_id} range".format(**config_data) + temp_cmd
+        commands.append(cmd)
+    return commands
 
 
 def _tmplt_ospf_area_sham_link(config_data):
@@ -196,25 +195,26 @@ def _tmplt_ospf_compatible(config_data):
 
 
 def _tmplt_ospf_default_information(config_data):
-    if "default_information" in config_data:
-        command = "default-information"
-        if "originate" in config_data["default_information"]:
-            command += " originate"
-        if "always" in config_data["default_information"]:
-            command += " always"
-        if "metric" in config_data["default_information"]:
-            command += " metric {metric}".format(
-                **config_data["default_information"]
-            )
-        if "metric_type" in config_data["default_information"]:
-            command += " metric-type {metric_type}".format(
-                **config_data["default_information"]
-            )
-        if "metric" in config_data["default_information"]:
-            command += " route-map {route_map}".format(
-                **config_data["default_information"]
-            )
-        return command
+    if "default_information" not in config_data:
+        return
+    command = "default-information"
+    if "originate" in config_data["default_information"]:
+        command += " originate"
+    if "always" in config_data["default_information"]:
+        command += " always"
+    if "metric" in config_data["default_information"]:
+        command += " metric {metric}".format(
+            **config_data["default_information"]
+        )
+    if "metric_type" in config_data["default_information"]:
+        command += " metric-type {metric_type}".format(
+            **config_data["default_information"]
+        )
+    if "metric" in config_data["default_information"]:
+        command += " route-map {route_map}".format(
+            **config_data["default_information"]
+        )
+    return command
 
 
 def _tmplt_ospf_discard_route(config_data):
@@ -266,40 +266,42 @@ def _tmplt_ospf_distance_ospf(config_data):
 
 
 def _tmplt_ospf_distribute_list_acls(config_data):
-    if "acls" in config_data.get("distribute_list"):
-        command = []
-        for k, v in iteritems(config_data["distribute_list"]["acls"]):
-            cmd = "distribute-list {name} {direction}".format(**v)
-            if "interface" in v:
-                cmd += " {interface}".format(**v)
-            if "protocol" in v:
-                cmd += " {protocol}".format(**v)
-            command.append(cmd)
-        return command
+    if "acls" not in config_data.get("distribute_list"):
+        return
+    command = []
+    for k, v in iteritems(config_data["distribute_list"]["acls"]):
+        cmd = "distribute-list {name} {direction}".format(**v)
+        if "interface" in v:
+            cmd += " {interface}".format(**v)
+        if "protocol" in v:
+            cmd += " {protocol}".format(**v)
+        command.append(cmd)
+    return command
 
 
 def _tmplt_ospf_distribute_list_prefix(config_data):
-    if "prefix" in config_data.get("distribute_list"):
-        command = "distribute-list prefix {name}".format(
+    if "prefix" not in config_data.get("distribute_list"):
+        return
+    command = "distribute-list prefix {name}".format(
+        **config_data["distribute_list"]["prefix"]
+    )
+    if "gateway_name" in config_data["distribute_list"]["prefix"]:
+        command += " gateway {gateway_name}".format(
             **config_data["distribute_list"]["prefix"]
         )
-        if "gateway_name" in config_data["distribute_list"]["prefix"]:
-            command += " gateway {gateway_name}".format(
-                **config_data["distribute_list"]["prefix"]
-            )
-        if "direction" in config_data["distribute_list"]["prefix"]:
-            command += " {direction}".format(
-                **config_data["distribute_list"]["prefix"]
-            )
-        if "interface" in config_data["distribute_list"]["prefix"]:
-            command += " {interface}".format(
-                **config_data["distribute_list"]["prefix"]
-            )
-        if "protocol" in config_data["distribute_list"]["prefix"]:
-            command += " {protocol}".format(
-                **config_data["distribute_list"]["prefix"]
-            )
-        return command
+    if "direction" in config_data["distribute_list"]["prefix"]:
+        command += " {direction}".format(
+            **config_data["distribute_list"]["prefix"]
+        )
+    if "interface" in config_data["distribute_list"]["prefix"]:
+        command += " {interface}".format(
+            **config_data["distribute_list"]["prefix"]
+        )
+    if "protocol" in config_data["distribute_list"]["prefix"]:
+        command += " {protocol}".format(
+            **config_data["distribute_list"]["prefix"]
+        )
+    return command
 
 
 def _tmplt_ospf_domain_id(config_data):
@@ -366,21 +368,22 @@ def _tmplt_ospf_manet(config_data):
 
 
 def _tmplt_ospf_limit(config_data):
-    if "limit" in config_data:
-        command = "limit retransmissions"
-        if "dc" in config_data["limit"]:
-            if "number" in config_data["limit"]["dc"]:
-                command += " dc {number}".format(**config_data["limit"]["dc"])
-            if "disable" in config_data["limit"]["dc"]:
-                command += " dc disable"
-        if "non_dc" in config_data["limit"]:
-            if "number" in config_data["limit"]["non_dc"]:
-                command += " non-dc {number}".format(
-                    **config_data["limit"]["non_dc"]
-                )
-            if "disable" in config_data["limit"]["dc"]:
-                command += " non-dc disable"
-        return command
+    if "limit" not in config_data:
+        return
+    command = "limit retransmissions"
+    if "dc" in config_data["limit"]:
+        if "number" in config_data["limit"]["dc"]:
+            command += " dc {number}".format(**config_data["limit"]["dc"])
+        if "disable" in config_data["limit"]["dc"]:
+            command += " dc disable"
+    if "non_dc" in config_data["limit"]:
+        if "number" in config_data["limit"]["non_dc"]:
+            command += " non-dc {number}".format(
+                **config_data["limit"]["non_dc"]
+            )
+        if "disable" in config_data["limit"]["dc"]:
+            command += " non-dc disable"
+    return command
 
 
 def _tmplt_ospf_vrf_local_rib_criteria(config_data):
@@ -404,50 +407,52 @@ def _tmplt_ospf_log_adjacency_changes(config_data):
 
 
 def _tmplt_ospf_max_lsa(config_data):
-    if "max_lsa" in config_data:
-        command = "max-lsa {number}".format(**config_data["max_lsa"])
-        if "threshold_value" in config_data["max_lsa"]:
-            command += " {threshold_value}".format(**config_data["max_lsa"])
-        if "ignore_count" in config_data["max_lsa"]:
-            command += " ignore-count {ignore_count}".format(
-                **config_data["max_lsa"]
-            )
-        if "ignore_time" in config_data["max_lsa"]:
-            command += " ignore-time {ignore_time}".format(
-                **config_data["max_lsa"]
-            )
-        if "reset_time" in config_data["max_lsa"]:
-            command += " reset-time {reset_time}".format(
-                **config_data["max_lsa"]
-            )
-        if "warning_only" in config_data["max_lsa"]:
-            command += " warning-only"
-        return command
+    if "max_lsa" not in config_data:
+        return
+    command = "max-lsa {number}".format(**config_data["max_lsa"])
+    if "threshold_value" in config_data["max_lsa"]:
+        command += " {threshold_value}".format(**config_data["max_lsa"])
+    if "ignore_count" in config_data["max_lsa"]:
+        command += " ignore-count {ignore_count}".format(
+            **config_data["max_lsa"]
+        )
+    if "ignore_time" in config_data["max_lsa"]:
+        command += " ignore-time {ignore_time}".format(
+            **config_data["max_lsa"]
+        )
+    if "reset_time" in config_data["max_lsa"]:
+        command += " reset-time {reset_time}".format(
+            **config_data["max_lsa"]
+        )
+    if "warning_only" in config_data["max_lsa"]:
+        command += " warning-only"
+    return command
 
 
 def _tmplt_ospf_max_metric(config_data):
-    if "max_metric" in config_data:
-        command = "max-metric"
-        if "router_lsa" in config_data["max_metric"]:
-            command += " router-lsa"
-        if "external_lsa" in config_data["max_metric"]:
-            command += " external-lsa {external_lsa}".format(
-                **config_data["max_metric"]
+    if "max_metric" not in config_data:
+        return
+    command = "max-metric"
+    if "router_lsa" in config_data["max_metric"]:
+        command += " router-lsa"
+    if "external_lsa" in config_data["max_metric"]:
+        command += " external-lsa {external_lsa}".format(
+            **config_data["max_metric"]
+        )
+    if "include_stub" in config_data["max_metric"]:
+        command += " include-stub"
+    if "on_startup" in config_data["max_metric"]:
+        if "time" in config_data["max_metric"]["on_startup"]:
+            command += " on-startup {time}".format(
+                **config_data["max_metric"]["on_startup"]
             )
-        if "include_stub" in config_data["max_metric"]:
-            command += " include-stub"
-        if "on_startup" in config_data["max_metric"]:
-            if "time" in config_data["max_metric"]["on_startup"]:
-                command += " on-startup {time}".format(
-                    **config_data["max_metric"]["on_startup"]
-                )
-            elif "wait_for_bgp" in config_data["max_metric"]["on_startup"]:
-                command += " on-startup wait-for-bgp"
-        if "summary_lsa" in config_data["max_metric"]:
-            command += " summary-lsa {summary_lsa}".format(
-                **config_data["max_metric"]
-            )
-        return command
+        elif "wait_for_bgp" in config_data["max_metric"]["on_startup"]:
+            command += " on-startup wait-for-bgp"
+    if "summary_lsa" in config_data["max_metric"]:
+        command += " summary-lsa {summary_lsa}".format(
+            **config_data["max_metric"]
+        )
+    return command
 
 
 def _tmplt_ospf_mpls_ldp(config_data):
@@ -465,57 +470,59 @@ def _tmplt_ospf_mpls_ldp(config_data):
 
 
 def _tmplt_ospf_mpls_traffic_eng(config_data):
-    if "traffic_eng" in config_data["mpls"]:
-        command = "mpls traffic-eng"
-        if "area" in config_data["mpls"]["traffic_eng"]:
+    if "traffic_eng" not in config_data["mpls"]:
+        return
+    command = "mpls traffic-eng"
+    if "area" in config_data["mpls"]["traffic_eng"]:
+        command += " area {area}".format(
+            **config_data["mpls"]["traffic_eng"]
+        )
+    elif "autoroute_exclude" in config_data["mpls"]["traffic_eng"]:
+        command += " autoroute-exclude prefix-list {autoroute_exclude}".format(
+            **config_data["mpls"]["traffic_eng"]
+        )
+    elif "interface" in config_data["mpls"]["traffic_eng"]:
+        command += " interface {int_type}".format(
+            **config_data["mpls"]["traffic_eng"]["interface"]
+        )
+        if "area" in config_data["mpls"]["traffic_eng"]["interface"]:
             command += " area {area}".format(
-                **config_data["mpls"]["traffic_eng"]
-            )
-        elif "autoroute_exclude" in config_data["mpls"]["traffic_eng"]:
-            command += " autoroute-exclude prefix-list {autoroute_exclude}".format(
-                **config_data["mpls"]["traffic_eng"]
-            )
-        elif "interface" in config_data["mpls"]["traffic_eng"]:
-            command += " interface {int_type}".format(
                 **config_data["mpls"]["traffic_eng"]["interface"]
             )
-            if "area" in config_data["mpls"]["traffic_eng"]["interface"]:
-                command += " area {area}".format(
-                    **config_data["mpls"]["traffic_eng"]["interface"]
-                )
-        elif "mesh_group" in config_data["mpls"]["traffic_eng"]:
-            command += " mesh-group {id} {interface}".format(
+    elif "mesh_group" in config_data["mpls"]["traffic_eng"]:
+        command += " mesh-group {id} {interface}".format(
+            **config_data["mpls"]["traffic_eng"]["mesh_group"]
+        )
+        if "area" in config_data["mpls"]["traffic_eng"]["mesh_group"]:
+            command += " area {area}".format(
                 **config_data["mpls"]["traffic_eng"]["mesh_group"]
             )
-            if "area" in config_data["mpls"]["traffic_eng"]["mesh_group"]:
-                command += " area {area}".format(
-                    **config_data["mpls"]["traffic_eng"]["mesh_group"]
-                )
-        elif "multicast_intact" in config_data["mpls"]["traffic_eng"]:
-            command += " multicast-intact"
-        elif "router_id_interface" in config_data["mpls"]["traffic_eng"]:
-            command += " router-id {router_id_interface}".format(
-                **config_data["mpls"]["traffic_eng"]
-            )
-        return command
+    elif "multicast_intact" in config_data["mpls"]["traffic_eng"]:
+        command += " multicast-intact"
+    elif "router_id_interface" in config_data["mpls"]["traffic_eng"]:
+        command += " router-id {router_id_interface}".format(
+            **config_data["mpls"]["traffic_eng"]
+        )
+    return command
 
 
 def _tmplt_ospf_neighbor(config_data):
-    if "neighbor" in config_data:
-        command = "neighbor"
-        if "address" in config_data["neighbor"]:
-            command += " {address}".format(**config_data["neighbor"])
-        if "cost" in config_data["neighbor"]:
-            command += " cost {cost}".format(**config_data["neighbor"])
-        if "database_filter" in config_data["neighbor"]:
-            command += " database-filter all out"
-        if "poll_interval" in config_data["neighbor"]:
-            command += " poll-interval {poll_interval}".format(
-                **config_data["neighbor"]
-            )
-        if "priority" in config_data["neighbor"]:
-            command += " priority {priority}".format(**config_data["neighbor"])
-        return command
+    if "neighbor" not in config_data:
+        return
+    command = "neighbor"
+    if "address" in config_data["neighbor"]:
+        command += " {address}".format(**config_data["neighbor"])
+    if "cost" in config_data["neighbor"]:
+        command += " cost {cost}".format(**config_data["neighbor"])
+    if "database_filter" in config_data["neighbor"]:
+        command += " database-filter all out"
+    if "poll_interval" in config_data["neighbor"]:
+        command += " poll-interval {poll_interval}".format(
+            **config_data["neighbor"]
+        )
+    if "priority" in config_data["neighbor"]:
+        command += " priority {priority}".format(**config_data["neighbor"])
+    return command
 
 
 def _tmplt_ospf_network(config_data):

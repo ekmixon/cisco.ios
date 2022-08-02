@@ -33,10 +33,7 @@ class LacpFacts(object):
         self.argument_spec = LacpArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -50,23 +47,17 @@ class LacpFacts(object):
         :rtype: dictionary
         :returns: facts
         """
-        if connection:
-            pass
-
         if not data:
             data = connection.get("show lacp sys-id")
 
         obj = {}
         if data:
-            lacp_obj = self.render_config(self.generated_spec, data)
-            if lacp_obj:
+            if lacp_obj := self.render_config(self.generated_spec, data):
                 obj = lacp_obj
 
         ansible_facts["ansible_network_resources"].pop("lacp", None)
-        facts = {}
-
         params = utils.validate_config(self.argument_spec, {"config": obj})
-        facts["lacp"] = utils.remove_empties(params["config"])
+        facts = {"lacp": utils.remove_empties(params["config"])}
         ansible_facts["ansible_network_resources"].update(facts)
 
         return ansible_facts

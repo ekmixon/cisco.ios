@@ -53,10 +53,7 @@ class Acl_Interfaces(ConfigBase):
         acl_interfaces_facts = facts["ansible_network_resources"].get(
             "acl_interfaces"
         )
-        if not acl_interfaces_facts:
-            return []
-
-        return acl_interfaces_facts
+        return acl_interfaces_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -64,8 +61,8 @@ class Acl_Interfaces(ConfigBase):
         :returns: The result from moduel execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_acl_interfaces_facts = self.get_acl_interfaces_facts()
@@ -151,7 +148,7 @@ class Acl_Interfaces(ConfigBase):
             commands = self._state_overridden(want, have)
         elif state == "deleted":
             commands = self._state_deleted(want, have)
-        elif state == "merged" or state == "rendered":
+        elif state in ["merged", "rendered"]:
             commands = self._state_merged(want, have)
         elif state == "replaced":
             commands = self._state_replaced(want, have)
@@ -224,7 +221,7 @@ class Acl_Interfaces(ConfigBase):
                     break
             else:
                 # configuring non-existing interface
-                commands.extend(self._set_config(interface, dict()))
+                commands.extend(self._set_config(interface, {}))
                 continue
             commands.extend(self._set_config(interface, each))
 
@@ -250,39 +247,40 @@ class Acl_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
         else:
             for each in have:
-                commands.extend(self._clear_config(dict(), each))
+                commands.extend(self._clear_config({}, each))
 
         return commands
 
     def dict_to_set(self, input_dict, test_set, final_set, count=0):
+        if not isinstance(input_dict, dict):
+            return
+        input_dict_len = len(input_dict)
         # recursive function to convert input dict to set for comparision
-        test_dict = dict()
-        if isinstance(input_dict, dict):
-            input_dict_len = len(input_dict)
-            for k, v in sorted(iteritems(input_dict)):
-                count += 1
-                if isinstance(v, list):
-                    for each in v:
-                        if isinstance(each, dict):
-                            input_dict_len = len(each)
-                            if [
-                                True for i in each.values() if type(i) == list
-                            ]:
-                                self.dict_to_set(each, set(), final_set, count)
-                            else:
-                                self.dict_to_set(each, test_set, final_set, 0)
-                else:
-                    if v is not None:
-                        test_dict.update({k: v})
-                    if (
-                        tuple(iteritems(test_dict)) not in test_set
-                        and count == input_dict_len
-                    ):
-                        test_set.add(tuple(iteritems(test_dict)))
-                        count = 0
-                    if count == input_dict_len + 1:
-                        test_set.update(tuple(iteritems(test_dict)))
-                        final_set.add(tuple(test_set))
+        test_dict = {}
+        for k, v in sorted(iteritems(input_dict)):
+            count += 1
+            if isinstance(v, list):
+                for each in v:
+                    if isinstance(each, dict):
+                        input_dict_len = len(each)
+                        if [
+                            True for i in each.values() if type(i) == list
+                        ]:
+                            self.dict_to_set(each, set(), final_set, count)
+                        else:
+                            self.dict_to_set(each, test_set, final_set, 0)
+            else:
+                if v is not None:
+                    test_dict[k] = v
+                if (
+                    tuple(iteritems(test_dict)) not in test_set
+                    and count == input_dict_len
+                ):
+                    test_set.add(tuple(iteritems(test_dict)))
+                    count = 0
+                if count == input_dict_len + 1:
+                    test_set.update(tuple(iteritems(test_dict)))
+                    final_set.add(tuple(test_set))
 
     def _set_config(self, want, have):
         """ Function that sets the acls config based on the want and have config
@@ -385,13 +383,9 @@ class Acl_Interfaces(ConfigBase):
         if w_access_group:
             # get the user input afi and acls
             for each in w_access_group:
-                want_acls = each.get("acls")
-                if want_acls:
-                    for each in want_acls:
-                        temp_want_acl_name.append(each.get("name"))
-
-        h_access_group = have.get("access_groups")
-        if h_access_group:
+                if want_acls := each.get("acls"):
+                    temp_want_acl_name.extend(each.get("name") for each in want_acls)
+        if h_access_group := have.get("access_groups"):
             for access_grp in h_access_group:
                 for acl in access_grp.get("acls"):
                     acl_name = acl.get("name")
@@ -399,14 +393,12 @@ class Acl_Interfaces(ConfigBase):
                     if access_grp.get("afi") == "ipv4":
                         if acl_name in temp_want_acl_name:
                             continue
-                        cmd = "no ip access-group"
-                        cmd += " {0} {1}".format(acl_name, acl_direction)
+                        cmd = "no ip access-group" + " {0} {1}".format(acl_name, acl_direction)
                         commands.append(cmd)
                     elif access_grp.get("afi") == "ipv6":
                         if acl_name in temp_want_acl_name:
                             continue
-                        cmd = "no ipv6 traffic-filter"
-                        cmd += " {0} {1}".format(acl_name, acl_direction)
+                        cmd = "no ipv6 traffic-filter" + " {0} {1}".format(acl_name, acl_direction)
                         commands.append(cmd)
         if commands:
             # inserting the interface at first

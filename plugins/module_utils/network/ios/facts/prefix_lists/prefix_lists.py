@@ -62,13 +62,10 @@ class Prefix_listsFacts(object):
         objs = prefix_lists_parser.parse()
 
         final_objs = []
-        temp = {}
-        temp["afi"] = None
-        temp["prefix_lists"] = []
+        temp = {"afi": None, "prefix_lists": []}
         if objs:
             for k, v in iteritems(objs):
-                temp_prefix_list = {}
-                temp_prefix_list["entries"] = []
+                temp_prefix_list = {"entries": []}
                 if not temp["afi"] or v["afi"] != temp["afi"]:
                     if temp and temp["afi"]:
                         temp["prefix_lists"] = sorted(

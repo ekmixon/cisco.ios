@@ -39,10 +39,7 @@ class Lldp_InterfacesFacts(object):
         self.argument_spec = Lldp_InterfacesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -64,8 +61,7 @@ class Lldp_InterfacesFacts(object):
         config = data.split("\n\n")
         for conf in config:
             if conf:
-                obj = self.render_config(self.generated_spec, conf)
-                if obj:
+                if obj := self.render_config(self.generated_spec, conf):
                     objs.append(obj)
         facts = {}
 
@@ -91,11 +87,7 @@ class Lldp_InterfacesFacts(object):
         :returns: The generated config
         """
         config = deepcopy(spec)
-        match = re.search(r"^(\S+)(:)", conf)
-        intf = ""
-        if match:
-            intf = match.group(1)
-
+        intf = match[1] if (match := re.search(r"^(\S+)(:)", conf)) else ""
         if get_interface_type(intf) == "unknown":
             return {}
         if intf.lower().startswith("gi"):

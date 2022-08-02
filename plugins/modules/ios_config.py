@@ -369,11 +369,13 @@ from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.c
 
 
 def check_args(module, warnings):
-    if module.params["multiline_delimiter"]:
-        if len(module.params["multiline_delimiter"]) != 1:
-            module.fail_json(
-                msg="multiline_delimiter value can only be a single character"
-            )
+    if (
+        module.params["multiline_delimiter"]
+        and len(module.params["multiline_delimiter"]) != 1
+    ):
+        module.fail_json(
+            msg="multiline_delimiter value can only be a single character"
+        )
 
 
 def edit_config_or_macro(connection, commands):
@@ -391,20 +393,18 @@ def get_candidate_config(module):
         candidate = module.params["src"]
     elif module.params["lines"]:
         candidate_obj = NetworkConfig(indent=1)
-        parents = module.params["parents"] or list()
+        parents = module.params["parents"] or []
         candidate_obj.add(module.params["lines"], parents=parents)
         candidate = dumps(candidate_obj, "raw")
     return candidate
 
 
 def get_running_config(module, current_config=None, flags=None):
-    running = module.params["running_config"]
-    if not running:
-        if not module.params["defaults"] and current_config:
-            running = current_config
-        else:
-            running = get_config(module, flags=flags)
-    return running
+    return module.params["running_config"] or (
+        current_config
+        if not module.params["defaults"] and current_config
+        else get_config(module, flags=flags)
+    )
 
 
 def save_config(module, result):

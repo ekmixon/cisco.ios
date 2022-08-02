@@ -72,15 +72,8 @@ class Bgp_global(ResourceModule):
         """ Generate configuration commands to send based on
             want, have and desired state.
         """
-        if self.want:
-            wantd = {self.want["as_number"]: self.want}
-        else:
-            wantd = {}
-        if self.have:
-            haved = {self.have["as_number"]: self.have}
-        else:
-            haved = {}
-
+        wantd = {self.want["as_number"]: self.want} if self.want else {}
+        haved = {self.have["as_number"]: self.have} if self.have else {}
         wantd, haved = self.list_to_dict(wantd, haved)
         # if state is merged, merge want onto have and then compare
         if self.state == "merged":
@@ -105,18 +98,23 @@ class Bgp_global(ResourceModule):
                 self._list_params_compare(want={}, have=haved[list(haved)[0]])
             wantd = {}
 
-        if self.state == "purged" and self.have:
-            if (
-                not self.want
-                or (self.have.get("as_number") == self.want.get("as_number"))
-                and len(self.have) >= 1
-            ):
-                self.addcmd(
-                    {"as_number": haved[list(haved)[0]].pop("as_number")},
-                    "as_number",
-                    True,
+        if (
+            self.state == "purged"
+            and self.have
+            and (
+                (
+                    not self.want
+                    or (self.have.get("as_number") == self.want.get("as_number"))
+                    and len(self.have) >= 1
                 )
-                wantd = {}
+            )
+        ):
+            self.addcmd(
+                {"as_number": haved[list(haved)[0]].pop("as_number")},
+                "as_number",
+                True,
+            )
+            wantd = {}
 
         for k, want in iteritems(wantd):
             self._compare(want=want, have=haved.pop(k, {}))
@@ -133,7 +131,7 @@ class Bgp_global(ResourceModule):
             self._bgp_config_compare(want.get("bgp"), have.get("bgp"))
             self._list_params_compare(want, have)
         elif self.state == "deleted":
-            self._bgp_config_compare(dict(), have.get("bgp"))
+            self._bgp_config_compare({}, have.get("bgp"))
 
     def _bgp_config_compare(self, want, have):
         if want and have and want != have and isinstance(want, dict):
@@ -148,45 +146,26 @@ class Bgp_global(ResourceModule):
                         )
                     if k in have and self.state == "replaced":
                         if set_have:
-                            self.compare(
-                                parsers=["bgp.config"],
-                                want=dict(),
-                                have={"bgp": {k: have[k]}},
-                            )
+                            self.compare(parsers=["bgp.config"], want={}, have={"bgp": {k: have[k]}})
                         self.compare(
                             parsers=["bgp.config"],
                             want={"bgp": {k: val}},
                             have={"bgp": {k: have[k]}},
                         )
                     else:
-                        self.compare(
-                            parsers=["bgp.config"],
-                            want={"bgp": {k: val}},
-                            have=dict(),
-                        )
+                        self.compare(parsers=["bgp.config"], want={"bgp": {k: val}}, have={})
         elif want and not have:
             for k, val in iteritems(want):
                 if not isinstance(val, list):
-                    self.compare(
-                        parsers=["bgp.config"],
-                        want={"bgp": {k: val}},
-                        have=dict(),
-                    )
+                    self.compare(parsers=["bgp.config"], want={"bgp": {k: val}}, have={})
         elif not want and have:
             for k, val in iteritems(have):
                 if not isinstance(val, list):
-                    self.compare(
-                        parsers=["bgp.config"],
-                        want=dict(),
-                        have={"bgp": {k: val}},
-                    )
+                    self.compare(parsers=["bgp.config"], want={}, have={"bgp": {k: val}})
 
     def _list_params_compare(self, want, have):
         def multi_compare(parser, want, have):
-            if want:
-                dict_iter = want
-            else:
-                dict_iter = have
+            dict_iter = want or have
             for k, v in iteritems(dict_iter):
                 if parser == "neighbor":
                     type = None
@@ -217,14 +196,16 @@ class Bgp_global(ResourceModule):
                         self.compare(
                             parsers=[parser],
                             want={parser: {k: v, type: want_type_val}},
-                            have=dict(),
+                            have={},
                         )
+
                     elif not want:
                         self.compare(
                             parsers=[parser],
-                            want=dict(),
+                            want={},
                             have={parser: {k: v, type: have_type_val}},
                         )
+
                 if parser == "redistribute":
                     if want and have:
                         self.compare(
@@ -233,17 +214,9 @@ class Bgp_global(ResourceModule):
                             have={parser: {k: have.get(k, {})}},
                         )
                     elif not have:
-                        self.compare(
-                            parsers=[parser],
-                            want={parser: {k: v}},
-                            have=dict(),
-                        )
+                        self.compare(parsers=[parser], want={parser: {k: v}}, have={})
                     elif not want:
-                        self.compare(
-                            parsers=[parser],
-                            want=dict(),
-                            have={parser: {k: v}},
-                        )
+                        self.compare(parsers=[parser], want={}, have={parser: {k: v}})
 
         for every in ["bgp", "neighbor", "redistribute"]:
 
@@ -263,7 +236,7 @@ class Bgp_global(ResourceModule):
                                 ):
                                     if k in param_have.get(each):
                                         self.compare(
-                                            parsers=[every + "." + each],
+                                            parsers=[f"{every}.{each}"],
                                             want={"bgp": {each: {k: v}}},
                                             have={
                                                 "bgp": {
@@ -276,6 +249,7 @@ class Bgp_global(ResourceModule):
                                             },
                                         )
 
+
                                 elif param_have and self.state == "replaced":
                                     if set_have and param_have.get(each):
                                         if isinstance(each, dict):
@@ -285,62 +259,37 @@ class Bgp_global(ResourceModule):
                                             ) in iteritems(
                                                 param_have.get(each)
                                             ):
-                                                multi_compare(
-                                                    parser=every,
-                                                    want=dict(),
-                                                    have=val_have,
-                                                )
+                                                multi_compare(parser=every, want={}, have=val_have)
                                         else:
                                             temp = {}
                                             for i in list(param_have[each]):
                                                 if i not in param_want[each]:
-                                                    temp.update(
-                                                        {
-                                                            each: {
-                                                                i: param_have[
-                                                                    each
-                                                                ][i]
-                                                            }
-                                                        }
-                                                    )
+                                                    temp[each] = {
+                                                        i: param_have[each][i]
+                                                    }
+
                                             temp_have = temp
                                             temp = {}
                                             for i in list(param_want[each]):
                                                 if i not in param_have[each]:
-                                                    temp.update(
-                                                        {
-                                                            each: {
-                                                                i: param_want[
-                                                                    each
-                                                                ][i]
-                                                            }
-                                                        }
-                                                    )
+                                                    temp[each] = {
+                                                        i: param_want[each][i]
+                                                    }
+
                                             temp_want = temp
                                             if temp_have:
-                                                self.compare(
-                                                    parsers=[
-                                                        every + "." + each
-                                                    ],
-                                                    want=dict(),
-                                                    have={"bgp": temp_have},
-                                                )
+                                                self.compare(parsers=[f"{every}.{each}"], want={}, have={"bgp": temp_have})
                                             if temp_want:
-                                                self.compare(
-                                                    parsers=[
-                                                        every + "." + each
-                                                    ],
-                                                    want={"bgp": temp_want},
-                                                    have=dict(),
-                                                )
+                                                self.compare(parsers=[f"{every}.{each}"], want={"bgp": temp_want}, have={})
                                         set_have = False
                                 else:
                                     self.compare(
-                                        parsers=[every + "." + each],
+                                        parsers=[f"{every}.{each}"],
                                         want={"bgp": {each: {k: v}}},
-                                        have=dict(),
+                                        have={},
                                     )
-                if every == "neighbor" or every == "redistribute":
+
+                if every in ["neighbor", "redistribute"]:
                     for k, v in iteritems(param_want):
                         if every == "neighbor":
                             if param_have and self.state == "merged":
@@ -354,19 +303,11 @@ class Bgp_global(ResourceModule):
                                     for key_have, val_have in iteritems(
                                         param_have
                                     ):
-                                        multi_compare(
-                                            parser=every,
-                                            want=dict(),
-                                            have=val_have,
-                                        )
+                                        multi_compare(parser=every, want={}, have=val_have)
                                     set_have = False
-                                multi_compare(
-                                    parser=every, want=v, have=dict()
-                                )
+                                multi_compare(parser=every, want=v, have={})
                             else:
-                                multi_compare(
-                                    parser=every, want=v, have=dict()
-                                )
+                                multi_compare(parser=every, want=v, have={})
                             self.commands = (
                                 [
                                     each
@@ -398,19 +339,11 @@ class Bgp_global(ResourceModule):
                                     for key_have, val_have in iteritems(
                                         param_have
                                     ):
-                                        multi_compare(
-                                            parser=every,
-                                            want=dict(),
-                                            have=val_have,
-                                        )
+                                        multi_compare(parser=every, want={}, have=val_have)
                                     set_have = False
-                                multi_compare(
-                                    parser=every, want={k: v}, have=dict()
-                                )
+                                multi_compare(parser=every, want={k: v}, have={})
                             else:
-                                multi_compare(
-                                    parser=every, want={k: v}, have=dict()
-                                )
+                                multi_compare(parser=every, want={k: v}, have={})
             elif param_have and self.state == "deleted":
                 del_config_have = True
                 if param_have:
@@ -422,37 +355,33 @@ class Bgp_global(ResourceModule):
                                         param_have.get(each)
                                     ):
                                         self.compare(
-                                            parsers=[every + "." + each],
-                                            want=dict(),
+                                            parsers=[f"{every}.{each}"],
+                                            want={},
                                             have={"bgp": {each: {k: v}}},
                                         )
+
                             del_config_have = False
                         elif every == "neighbor":
-                            multi_compare(parser=every, want=dict(), have=v)
+                            multi_compare(parser=every, want={}, have=v)
                         elif every == "redistribute":
                             if param_have:
-                                multi_compare(
-                                    parser=every, want=dict(), have={k: v}
-                                )
+                                multi_compare(parser=every, want={}, have={k: v})
 
     def list_to_dict(self, wantd, haved):
         for thing in wantd, haved:
             if thing:
                 for key, val in iteritems(thing):
                     for every in ["bgp", "neighbor", "redistribute"]:
-                        value = val.get(every)
-                        if value:
+                        if value := val.get(every):
                             if isinstance(value, dict):
                                 for k, v in iteritems(val.get(every)):
                                     if isinstance(v, list):
-                                        temp = dict()
-                                        temp[k] = {}
+                                        temp = {k: {}}
                                         for each in v:
                                             temp[k].update(each)
                                         val[every][k] = temp[k]
                             elif isinstance(value, list):
-                                temp = dict()
-                                temp[every] = {}
+                                temp = {every: {}}
                                 for each in value:
                                     if every == "neighbor":
                                         if each.get("address"):

@@ -63,9 +63,7 @@ class Lldp_Interfaces(ConfigBase):
         lldp_interfaces_facts = facts["ansible_network_resources"].get(
             "lldp_interfaces"
         )
-        if not lldp_interfaces_facts:
-            return []
-        return lldp_interfaces_facts
+        return lldp_interfaces_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -74,8 +72,8 @@ class Lldp_Interfaces(ConfigBase):
         :returns: The result from module execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_lldp_interfaces_facts = self.get_lldp_interfaces_facts()
@@ -183,7 +181,7 @@ class Lldp_Interfaces(ConfigBase):
             else:
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -210,7 +208,7 @@ class Lldp_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -232,7 +230,7 @@ class Lldp_Interfaces(ConfigBase):
                     break
             else:
                 if self.state == "rendered":
-                    commands.extend(self._set_config(interface, dict()))
+                    commands.extend(self._set_config(interface, {}))
                 continue
             commands.extend(self._set_config(interface, each))
 
@@ -258,7 +256,7 @@ class Lldp_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
         else:
             for each in have:
-                commands.extend(self._clear_config(dict(), each))
+                commands.extend(self._clear_config({}, each))
 
         return commands
 
@@ -270,9 +268,7 @@ class Lldp_Interfaces(ConfigBase):
         # Get the diff b/w want and have
         want_dict = dict_to_set(want)
         have_dict = dict_to_set(have)
-        diff = want_dict - have_dict
-
-        if diff:
+        if diff := want_dict - have_dict:
             diff = dict(diff)
             receive = diff.get("receive")
             transmit = diff.get("transmit")

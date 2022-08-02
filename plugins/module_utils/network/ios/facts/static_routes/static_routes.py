@@ -40,10 +40,7 @@ class Static_RoutesFacts(object):
         self.argument_spec = Static_RoutesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -72,10 +69,9 @@ class Static_RoutesFacts(object):
         same_dest = self.populate_destination(config)
         for key in same_dest.keys():
             if key:
-                obj = self.render_config(
+                if obj := self.render_config(
                     self.generated_spec, key, same_dest[key]
-                )
-                if obj:
+                ):
                     objs.append(obj)
         facts = {}
 
@@ -90,9 +86,7 @@ class Static_RoutesFacts(object):
 
         temp_objs = [each for each in objs if each.get("vrf") is not None]
         temp_objs.append(no_vrf_address_family)
-        objs = temp_objs
-
-        if objs:
+        if objs := temp_objs:
             facts["static_routes"] = []
             params = utils.validate_config(
                 self.argument_spec, {"config": objs}
@@ -105,7 +99,7 @@ class Static_RoutesFacts(object):
 
     def update_netmask_to_cidr(self, filter, pos, del_pos):
         netmask = filter.split(" ")
-        dest = netmask[pos] + "/" + netmask_to_cidr(netmask[del_pos])
+        dest = f"{netmask[pos]}/{netmask_to_cidr(netmask[del_pos])}"
         netmask[pos] = dest
         del netmask[del_pos]
         filter_vrf = " "
@@ -118,11 +112,11 @@ class Static_RoutesFacts(object):
             if i and "ospf" not in i:
                 if "::" in i and "vrf" in i:
                     ip_str = "ipv6 route vrf"
-                elif "::" in i and "vrf" not in i:
+                elif "::" in i:
                     ip_str = "ipv6 route"
                 elif "." in i and "vrf" in i:
                     ip_str = "ip route vrf"
-                elif "." in i and "vrf" not in i:
+                elif "." in i:
                     ip_str = "ip route"
 
                 if "vrf" in i:
@@ -131,17 +125,15 @@ class Static_RoutesFacts(object):
                         filter_vrf, dest_vrf = self.update_netmask_to_cidr(
                             filter_vrf, 1, 2
                         )
-                        dest_vrf = dest_vrf + "_vrf"
+                        dest_vrf = f"{dest_vrf}_vrf"
                     else:
                         dest_vrf = filter_vrf.split(" ")[1]
-                    if dest_vrf not in same_dest.keys():
+                    if (
+                        dest_vrf not in same_dest.keys()
+                        or "vrf" not in same_dest[dest_vrf][0]
+                    ):
                         same_dest[dest_vrf] = []
-                        same_dest[dest_vrf].append("vrf " + filter_vrf)
-                    elif "vrf" not in same_dest[dest_vrf][0]:
-                        same_dest[dest_vrf] = []
-                        same_dest[dest_vrf].append("vrf " + filter_vrf)
-                    else:
-                        same_dest[dest_vrf].append(("vrf " + filter_vrf))
+                    same_dest[dest_vrf].append(f"vrf {filter_vrf}")
                 else:
                     filter_non_vrf = utils.parse_conf_arg(i, ip_str)
                     if (
@@ -152,14 +144,9 @@ class Static_RoutesFacts(object):
                         )
                     else:
                         dest = filter_non_vrf.split(" ")[0]
-                    if dest not in same_dest.keys():
+                    if dest not in same_dest.keys() or "vrf" in same_dest[dest][0]:
                         same_dest[dest] = []
-                        same_dest[dest].append(filter_non_vrf)
-                    elif "vrf" in same_dest[dest][0]:
-                        same_dest[dest] = []
-                        same_dest[dest].append(filter_non_vrf)
-                    else:
-                        same_dest[dest].append(filter_non_vrf)
+                    same_dest[dest].append(filter_non_vrf)
         return same_dest
 
     def render_config(self, spec, conf, conf_val):
@@ -174,14 +161,12 @@ class Static_RoutesFacts(object):
         """
         config = deepcopy(spec)
         config["address_families"] = []
-        route_dict = dict()
-        final_route = dict()
-        afi = dict()
-        final_route["routes"] = []
+        route_dict = {}
+        afi = {}
+        final_route = {"routes": []}
         next_hops = []
         hops = {}
         vrf = ""
-        address_family = dict()
         for each in conf_val:
             route = each.split(" ")
             if "vrf" in conf_val[0]:
@@ -197,32 +182,27 @@ class Static_RoutesFacts(object):
                 elif "." in conf:
                     if is_valid_ip(route[3]):
                         hops["forward_router_address"] = route[3]
-                        afi["afi"] = "ipv4"
                     else:
                         hops["interface"] = route[3]
-                        afi["afi"] = "ipv4"
                         if is_valid_ip(route[4]):
                             hops["forward_router_address"] = route[4]
-            else:
-
-                if "::" in conf:
-                    if is_valid_ip(route[1]):
-                        hops["forward_router_address"] = route[1]
-                        afi["afi"] = "ipv6"
-                    else:
-                        hops["interface"] = route[1]
-                        afi["afi"] = "ipv6"
-                        if is_valid_ip(route[2]):
-                            hops["forward_router_address"] = route[2]
-                elif "." in conf:
-                    if is_valid_ip(route[1]):
-                        hops["forward_router_address"] = route[1]
-                        afi["afi"] = "ipv4"
-                    else:
-                        hops["interface"] = route[1]
-                        afi["afi"] = "ipv4"
-                        if is_valid_ip(route[2]):
-                            hops["forward_router_address"] = route[2]
+                    afi["afi"] = "ipv4"
+            elif "::" in conf:
+                if is_valid_ip(route[1]):
+                    hops["forward_router_address"] = route[1]
+                else:
+                    hops["interface"] = route[1]
+                    if is_valid_ip(route[2]):
+                        hops["forward_router_address"] = route[2]
+                afi["afi"] = "ipv6"
+            elif "." in conf:
+                if is_valid_ip(route[1]):
+                    hops["forward_router_address"] = route[1]
+                else:
+                    hops["interface"] = route[1]
+                    if is_valid_ip(route[2]):
+                        hops["forward_router_address"] = route[2]
+                afi["afi"] = "ipv4"
             try:
                 temp_list = each.split(" ")
                 if "tag" in temp_list:
@@ -263,8 +243,7 @@ class Static_RoutesFacts(object):
         route_dict["next_hops"] = next_hops
         if route_dict:
             final_route["routes"].append(route_dict)
-        address_family.update(afi)
-        address_family.update(final_route)
+        address_family = afi | final_route
         config["address_families"].append(address_family)
         if vrf:
             config["vrf"] = vrf

@@ -60,8 +60,7 @@ class Bgp_globalFacts(object):
         objs = utils.remove_empties(objs)
         if "neighbor" in objs:
             temp_neighbor = []
-            temp = {}
-            temp["address"] = None
+            temp = {"address": None}
             for each in objs["neighbor"]:
                 if temp["address"] != each["address"]:
                     if temp["address"]:

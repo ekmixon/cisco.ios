@@ -71,8 +71,7 @@ class AclsFacts(object):
             temp_v4 = sorted(temp_v4, key=lambda i: str(i["name"]))
             temp_v6 = sorted(temp_v6, key=lambda i: str(i["name"]))
             for each in temp_v4:
-                aces_ipv4 = each.get("aces")
-                if aces_ipv4:
+                if aces_ipv4 := each.get("aces"):
                     for each_ace in each.get("aces"):
                         if each["acl_type"] == "standard":
                             each_ace["source"] = each_ace.pop("std_source")
@@ -87,8 +86,7 @@ class AclsFacts(object):
                         if each_ace.get("std_source") == {}:
                             del each_ace["std_source"]
             for each in temp_v6:
-                aces_ipv6 = each.get("aces")
-                if aces_ipv6:
+                if aces_ipv6 := each.get("aces"):
                     for each_ace in each.get("aces"):
                         if each_ace.get("std_source") == {}:
                             del each_ace["std_source"]

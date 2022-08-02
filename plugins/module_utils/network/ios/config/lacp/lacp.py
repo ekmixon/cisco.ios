@@ -52,10 +52,7 @@ class Lacp(ConfigBase):
             self.gather_subset, self.gather_network_resources, data=data
         )
         lacp_facts = facts["ansible_network_resources"].get("lacp")
-        if not lacp_facts:
-            return dict()
-
-        return lacp_facts
+        return lacp_facts or {}
 
     def execute_module(self):
         """ Execute the module
@@ -64,13 +61,13 @@ class Lacp(ConfigBase):
         :returns: The result from module execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_lacp_facts = self.get_lacp_facts()
         else:
-            existing_lacp_facts = dict()
+            existing_lacp_facts = {}
 
         if self.state in self.ACTION_STATES or self.state == "rendered":
             commands.extend(self.set_config(existing_lacp_facts))
@@ -93,7 +90,7 @@ class Lacp(ConfigBase):
                 )
             result["parsed"] = self.get_lacp_facts(data=running_config)
         else:
-            changed_lacp_facts = dict()
+            changed_lacp_facts = {}
 
         if self.state in self.ACTION_STATES:
             result["before"] = existing_lacp_facts
@@ -179,15 +176,11 @@ class Lacp(ConfigBase):
         """
         commands = []
 
-        if want:
-            commands.extend(self._clear_config(have))
-        else:
-            commands.extend(self._clear_config(have))
-
+        commands.extend(self._clear_config(have))
         return commands
 
     def _remove_command_from_config_list(self, cmd, commands):
-        commands.append("no %s" % cmd)
+        commands.append(f"no {cmd}")
         return commands
 
     def _add_command_to_config_list(self, cmd, commands):
@@ -200,9 +193,7 @@ class Lacp(ConfigBase):
 
         want_dict = dict_to_set(want)
         have_dict = dict_to_set(have)
-        diff = want_dict - have_dict
-
-        if diff:
+        if diff := want_dict - have_dict:
             cmd = "lacp system-priority {0}".format(
                 want.get("system").get("priority")
             )

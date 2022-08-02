@@ -176,13 +176,12 @@ def validate_ipv4(value, module):
         address = value.split("/")
         if len(address) != 2:
             module.fail_json(
-                msg="address format is <ipv4 address>/<mask>, got invalid format %s"
-                % value
+                msg=f"address format is <ipv4 address>/<mask>, got invalid format {value}"
             )
+
         if not is_masklen(address[1]):
             module.fail_json(
-                msg="invalid value for mask: %s, mask should be in range 0-32"
-                % address[1]
+                msg=f"invalid value for mask: {address[1]}, mask should be in range 0-32"
             )
 
 
@@ -191,13 +190,12 @@ def validate_ipv6(value, module):
         address = value.split("/")
         if len(address) != 2:
             module.fail_json(
-                msg="address format is <ipv6 address>/<mask>, got invalid format %s"
-                % value
+                msg=f"address format is <ipv6 address>/<mask>, got invalid format {value}"
             )
+
         elif not 0 <= int(address[1]) <= 128:
             module.fail_json(
-                msg="invalid value for mask: %s, mask should be in range 0-128"
-                % address[1]
+                msg=f"invalid value for mask: {address[1]}, mask should be in range 0-128"
             )
 
 
@@ -206,16 +204,16 @@ def validate_param_values(module, obj, param=None):
         param = module.params
     for key in obj:
         # validate the param value (if validator func exists)
-        validator = globals().get("validate_%s" % key)
+        validator = globals().get(f"validate_{key}")
         if callable(validator):
             validator(param.get(key), module)
 
 
 def parse_config_argument(configobj, name, arg=None):
-    cfg = configobj["interface %s" % name]
+    cfg = configobj[f"interface {name}"]
     cfg = "\n".join(cfg.children)
     values = []
-    matches = re.finditer("%s (.+)$" % arg, cfg, re.M)
+    matches = re.finditer(f"{arg} (.+)$", cfg, re.M)
     for match in matches:
         match_str = match.group(1).strip()
         if arg == "ipv6 address":
@@ -227,21 +225,18 @@ def parse_config_argument(configobj, name, arg=None):
 
 
 def search_obj_in_list(name, lst):
-    for o in lst:
-        if o["name"] == name:
-            return o
-    return None
+    return next((o for o in lst if o["name"] == name), None)
 
 
 def map_obj_to_commands(updates, module):
-    commands = list()
+    commands = []
     want, have = updates
     for w in want:
         name = w["name"]
         ipv4 = w["ipv4"]
         ipv6 = w["ipv6"]
         state = w["state"]
-        interface = "interface " + name
+        interface = f"interface {name}"
         commands.append(interface)
         obj_in_have = search_obj_in_list(name, have)
         if state == "absent" and obj_in_have:
@@ -263,26 +258,28 @@ def map_obj_to_commands(updates, module):
                     if "dhcp" in obj_in_have["ipv6"]:
                         commands.append("no ipv6 address dhcp")
         elif state == "present":
-            if ipv4:
-                if (
+            if ipv4 and (
+                (
                     obj_in_have is None
                     or obj_in_have.get("ipv4") is None
                     or ipv4 != obj_in_have["ipv4"]
-                ):
-                    address = ipv4.split("/")
-                    if len(address) == 2:
-                        ipv4 = "{0} {1}".format(
-                            address[0], to_netmask(address[1])
-                        )
-                    commands.append("ip address {0}".format(ipv4))
-            if ipv6:
-                if (
+                )
+            ):
+                address = ipv4.split("/")
+                if len(address) == 2:
+                    ipv4 = "{0} {1}".format(
+                        address[0], to_netmask(address[1])
+                    )
+                commands.append("ip address {0}".format(ipv4))
+            if ipv6 and (
+                (
                     obj_in_have is None
                     or obj_in_have.get("ipv6") is None
                     or ipv6.lower()
                     not in [addr.lower() for addr in obj_in_have["ipv6"]]
-                ):
-                    commands.append("ipv6 address {0}".format(ipv6))
+                )
+            ):
+                commands.append("ipv6 address {0}".format(ipv6))
         if commands[-1] == interface:
             commands.pop(-1)
     return commands
@@ -293,8 +290,8 @@ def map_config_to_obj(module):
     configobj = NetworkConfig(indent=1, contents=config)
     match = re.findall("^interface (\\S+)", config, re.M)
     if not match:
-        return list()
-    instances = list()
+        return []
+    instances = []
     for item in set(match):
         ipv4 = parse_config_argument(configobj, item, "ip address")
         if ipv4:
@@ -315,8 +312,7 @@ def map_config_to_obj(module):
 
 def map_params_to_obj(module):
     obj = []
-    aggregate = module.params.get("aggregate")
-    if aggregate:
+    if aggregate := module.params.get("aggregate"):
         for item in aggregate:
             for key in item:
                 if item.get(key) is None:
@@ -340,20 +336,26 @@ def main():
     """ main entry point for module execution
     """
     element_spec = dict(
-        name=dict(),
-        ipv4=dict(),
-        ipv6=dict(),
+        name={},
+        ipv4={},
+        ipv6={},
         state=dict(default="present", choices=["present", "absent"]),
     )
+
     aggregate_spec = deepcopy(element_spec)
     aggregate_spec["name"] = dict(required=True)
     # remove default in aggregate spec, to handle common arguments
     remove_default_spec(aggregate_spec)
-    argument_spec = dict(
-        aggregate=dict(type="list", elements="dict", options=aggregate_spec)
+    argument_spec = (
+        dict(
+            aggregate=dict(
+                type="list", elements="dict", options=aggregate_spec
+            )
+        )
+        | element_spec
     )
-    argument_spec.update(element_spec)
-    argument_spec.update(ios_argument_spec)
+
+    argument_spec |= ios_argument_spec
     required_one_of = [["name", "aggregate"]]
     mutually_exclusive = [["name", "aggregate"]]
     module = AnsibleModule(
@@ -362,12 +364,11 @@ def main():
         mutually_exclusive=mutually_exclusive,
         supports_check_mode=True,
     )
-    warnings = list()
-    result = {"changed": False}
+    warnings = []
     want = map_params_to_obj(module)
     have = map_config_to_obj(module)
     commands = map_obj_to_commands((want, have), module)
-    result["commands"] = commands
+    result = {"changed": False, "commands": commands}
     if commands:
         if not module.check_mode:
             resp = load_config(module, commands)

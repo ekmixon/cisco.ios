@@ -39,10 +39,7 @@ class Lacp_InterfacesFacts(object):
         self.argument_spec = Lacp_InterfacesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -56,9 +53,6 @@ class Lacp_InterfacesFacts(object):
         :rtype: dictionary
         :returns: facts
         """
-        if connection:
-            pass
-
         objs = []
         if not data:
             data = connection.get("show running-config | section ^interface")
@@ -67,8 +61,7 @@ class Lacp_InterfacesFacts(object):
 
         for conf in config:
             if conf:
-                obj = self.render_config(self.generated_spec, conf)
-                if obj:
+                if obj := self.render_config(self.generated_spec, conf):
                     objs.append(obj)
         facts = {}
 
@@ -95,7 +88,7 @@ class Lacp_InterfacesFacts(object):
         """
         config = deepcopy(spec)
         match = re.search(r"^(\S+)", conf)
-        intf = match.group(1)
+        intf = match[1]
         if get_interface_type(intf) == "unknown":
             return {}
 

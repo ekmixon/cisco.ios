@@ -40,7 +40,7 @@ from ansible.module_utils.connection import Connection, ConnectionError
 _DEVICE_CONFIGS = {}
 
 ios_provider_spec = {
-    "host": dict(),
+    "host": {},
     "port": dict(type="int"),
     "username": dict(fallback=(env_fallback, ["ANSIBLE_NET_USERNAME"])),
     "password": dict(
@@ -59,6 +59,7 @@ ios_provider_spec = {
     ),
     "timeout": dict(type="int"),
 }
+
 ios_argument_spec = {
     "provider": dict(
         type="dict",
@@ -82,7 +83,7 @@ def get_connection(module):
     if network_api == "cliconf":
         module._ios_connection = Connection(module._socket_path)
     else:
-        module.fail_json(msg="Invalid connection type %s" % network_api)
+        module.fail_json(msg=f"Invalid connection type {network_api}")
 
     return module._ios_connection
 
@@ -110,10 +111,7 @@ def get_defaults_flag(module):
 def get_config(module, flags=None):
     flags = to_list(flags)
 
-    section_filter = False
-    if flags and "section" in flags[-1]:
-        section_filter = True
-
+    section_filter = bool(flags and "section" in flags[-1])
     flag_str = " ".join(flags)
 
     try:
@@ -201,9 +199,5 @@ def normalize_interface(name):
     else:
         if_number = _get_number(name)
 
-    if if_type:
-        proper_interface = if_type + if_number
-    else:
-        proper_interface = name
-
+    proper_interface = if_type + if_number if if_type else name
     return proper_interface

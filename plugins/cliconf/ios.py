@@ -68,9 +68,7 @@ class Cliconf(CliconfBase):
     @enable_mode
     def get_config(self, source="running", flags=None, format=None):
         if source not in ("running", "startup"):
-            raise ValueError(
-                "fetching configuration from %s is not supported" % source
-            )
+            raise ValueError(f"fetching configuration from {source} is not supported")
 
         if format:
             raise ValueError(
@@ -79,12 +77,12 @@ class Cliconf(CliconfBase):
 
         if not flags:
             flags = []
-        if source == "running":
-            cmd = "show running-config "
-        else:
-            cmd = "show startup-config "
+        cmd = (
+            "show running-config "
+            if source == "running"
+            else "show startup-config "
+        ) + " ".join(to_list(flags))
 
-        cmd += " ".join(to_list(flags))
         cmd = cmd.strip()
 
         return self.send_command(cmd)
@@ -131,7 +129,6 @@ class Cliconf(CliconfBase):
                    'banner_diff': {}
                }
         """
-        diff = {}
         device_operations = self.get_device_operations()
         option_values = self.get_option_values()
 
@@ -171,18 +168,20 @@ class Cliconf(CliconfBase):
             configdiffobjs = candidate_obj.items
             have_banners = {}
 
-        diff["config_diff"] = (
-            dumps(configdiffobjs, "commands") if configdiffobjs else ""
-        )
+        diff = {
+            "config_diff": dumps(configdiffobjs, "commands")
+            if configdiffobjs
+            else ""
+        }
+
         banners = self._diff_banners(want_banners, have_banners)
-        diff["banner_diff"] = banners if banners else {}
+        diff["banner_diff"] = banners or {}
         return diff
 
     @enable_mode
     def edit_config(
         self, candidate=None, commit=True, replace=None, comment=None
     ):
-        resp = {}
         operations = self.get_device_operations()
         self.check_edit_config_capability(
             operations, candidate, commit, replace, comment
@@ -190,24 +189,21 @@ class Cliconf(CliconfBase):
 
         results = []
         requests = []
-        if commit:
-            self.send_command("configure terminal")
-            for line in to_list(candidate):
-                if not isinstance(line, Mapping):
-                    line = {"command": line}
-
-                cmd = line["command"]
-                if cmd != "end" and cmd[0] != "!":
-                    results.append(self.send_command(**line))
-                    requests.append(cmd)
-
-            self.send_command("end")
-        else:
+        if not commit:
             raise ValueError("check mode is not supported")
 
-        resp["request"] = requests
-        resp["response"] = results
-        return resp
+        self.send_command("configure terminal")
+        for line in to_list(candidate):
+            if not isinstance(line, Mapping):
+                line = {"command": line}
+
+            cmd = line["command"]
+            if cmd != "end" and cmd[0] != "!":
+                results.append(self.send_command(**line))
+                requests.append(cmd)
+
+        self.send_command("end")
+        return {"request": requests, "response": results}
 
     def edit_macro(
         self, candidate=None, commit=True, replace=None, comment=None
@@ -220,7 +216,6 @@ class Cliconf(CliconfBase):
           match: line
           replace: block
         """
-        resp = {}
         operations = self.get_device_operations()
         self.check_edit_config_capability(
             operations, candidate, commit, replace, comment
@@ -236,7 +231,7 @@ class Cliconf(CliconfBase):
             commands += candidate.pop(0) + "\n"
             multiline_delimiter = candidate.pop(-1)
             for line in candidate:
-                commands += " " + line + "\n"
+                commands += f" {line}" + "\n"
             commands += multiline_delimiter + "\n"
             obj = {"command": commands, "sendonly": True}
             results.append(self.send_command(**obj))
@@ -248,9 +243,7 @@ class Cliconf(CliconfBase):
             results.append(self.send_command("\n"))
             requests.append("\n")
 
-        resp["request"] = requests
-        resp["response"] = results
-        return resp
+        return {"request": requests, "response": results}
 
     def get(
         self,
@@ -280,33 +273,28 @@ class Cliconf(CliconfBase):
 
     def get_device_info(self):
         if not self._device_info:
-            device_info = {}
+            device_info = {"network_os": "ios"}
 
-            device_info["network_os"] = "ios"
             reply = self.get(command="show version")
             data = to_text(reply, errors="surrogate_or_strict").strip()
-            match = re.search(r"Version (\S+)", data)
-            if match:
-                device_info["network_os_version"] = match.group(1).strip(",")
+            if match := re.search(r"Version (\S+)", data):
+                device_info["network_os_version"] = match[1].strip(",")
 
             model_search_strs = [
                 r"^[Cc]isco (.+) \(revision",
                 r"^[Cc]isco (\S+).+bytes of .*memory",
             ]
             for item in model_search_strs:
-                match = re.search(item, data, re.M)
-                if match:
-                    version = match.group(1).split(" ")
+                if match := re.search(item, data, re.M):
+                    version = match[1].split(" ")
                     device_info["network_os_model"] = version[0]
                     break
 
-            match = re.search(r"^(.+) uptime", data, re.M)
-            if match:
-                device_info["network_os_hostname"] = match.group(1)
+            if match := re.search(r"^(.+) uptime", data, re.M):
+                device_info["network_os_hostname"] = match[1]
 
-            match = re.search(r'image file is "(.+)"', data)
-            if match:
-                device_info["network_os_image"] = match.group(1)
+            if match := re.search(r'image file is "(.+)"', data):
+                device_info["network_os_image"] = match[1]
 
             self._device_info = device_info
 
@@ -361,13 +349,12 @@ class Cliconf(CliconfBase):
         :return: Returns response of executing the configuration command received
              from remote host
         """
-        resp = {}
         banners_obj = json.loads(candidate)
         results = []
         requests = []
         if commit:
             for key, value in iteritems(banners_obj):
-                key += " %s" % multiline_delimiter
+                key += f" {multiline_delimiter}"
                 self.send_command("config terminal", sendonly=True)
                 for cmd in [key, value, multiline_delimiter]:
                     obj = {"command": cmd, "sendonly": True}
@@ -379,22 +366,18 @@ class Cliconf(CliconfBase):
                 results.append(self.send_command("\n"))
                 requests.append("\n")
 
-        resp["request"] = requests
-        resp["response"] = results
-
-        return resp
+        return {"request": requests, "response": results}
 
     def run_commands(self, commands=None, check_rc=True):
         if commands is None:
             raise ValueError("'commands' value is required")
 
-        responses = list()
+        responses = []
         for cmd in to_list(commands):
             if not isinstance(cmd, Mapping):
                 cmd = {"command": cmd}
 
-            output = cmd.pop("output", None)
-            if output:
+            if output := cmd.pop("output", None):
                 raise ValueError(
                     "'output' value %s is not supported for run_commands"
                     % output
@@ -420,15 +403,11 @@ class Cliconf(CliconfBase):
         out = self.get("show running-config ?")
         out = to_text(out, errors="surrogate_then_replace")
 
-        commands = set()
-        for line in out.splitlines():
-            if line.strip():
-                commands.add(line.strip().split()[0])
+        commands = {
+            line.strip().split()[0] for line in out.splitlines() if line.strip()
+        }
 
-        if "all" in commands:
-            return "all"
-        else:
-            return "full"
+        return "all" if "all" in commands else "full"
 
     def set_cli_prompt_context(self):
         """
@@ -459,23 +438,17 @@ class Cliconf(CliconfBase):
         banner_cmds = re.findall(r"^banner (\w+)", config, re.M)
         for cmd in banner_cmds:
             regex = r"banner %s \^C(.+?)(?=\^C)" % cmd
-            match = re.search(regex, config, re.S)
-            if match:
-                key = "banner %s" % cmd
-                banners[key] = match.group(1).strip()
+            if match := re.search(regex, config, re.S):
+                key = f"banner {cmd}"
+                banners[key] = match[1].strip()
 
         for cmd in banner_cmds:
             regex = r"banner %s \^C(.+?)(?=\^C)" % cmd
-            match = re.search(regex, config, re.S)
-            if match:
-                config = config.replace(str(match.group(1)), "")
+            if match := re.search(regex, config, re.S):
+                config = config.replace(str(match[1]), "")
 
         config = re.sub(r"banner \w+ \^C\^C", "!! banner removed", config)
         return config, banners
 
     def _diff_banners(self, want, have):
-        candidate = {}
-        for key, value in iteritems(want):
-            if value != have.get(key):
-                candidate[key] = value
-        return candidate
+        return {key: value for key, value in iteritems(want) if value != have.get(key)}

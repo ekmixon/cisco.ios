@@ -157,9 +157,9 @@ def parse_commands(module, warnings):
         for item in list(commands):
             if not item["command"].startswith("show"):
                 warnings.append(
-                    "Only show commands are supported when using check mode, not executing %s"
-                    % item["command"]
+                    f'Only show commands are supported when using check mode, not executing {item["command"]}'
                 )
+
                 commands.remove(item)
     return commands
 
@@ -174,14 +174,14 @@ def main():
         retries=dict(default=10, type="int"),
         interval=dict(default=1, type="int"),
     )
-    argument_spec.update(ios_argument_spec)
+    argument_spec |= ios_argument_spec
     module = AnsibleModule(
         argument_spec=argument_spec, supports_check_mode=True
     )
-    warnings = list()
+    warnings = []
     result = {"changed": False, "warnings": warnings}
     commands = parse_commands(module, warnings)
-    wait_for = module.params["wait_for"] or list()
+    wait_for = module.params["wait_for"] or []
     try:
         conditionals = [Conditional(c) for c in wait_for]
     except AttributeError as exc:
@@ -194,7 +194,7 @@ def main():
         for item in list(conditionals):
             if item(responses):
                 if match == "any":
-                    conditionals = list()
+                    conditionals = []
                     break
                 conditionals.remove(item)
         if not conditionals:
@@ -205,9 +205,7 @@ def main():
         failed_conditions = [item.raw for item in conditionals]
         msg = "One or more conditional statements have not been satisfied"
         module.fail_json(msg=msg, failed_conditions=failed_conditions)
-    result.update(
-        {"stdout": responses, "stdout_lines": list(to_lines(responses))}
-    )
+    result |= {"stdout": responses, "stdout_lines": list(to_lines(responses))}
     module.exit_json(**result)
 
 

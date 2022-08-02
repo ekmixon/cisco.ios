@@ -38,115 +38,109 @@ def _tmplt_access_list_name(config_data):
 
 
 def _tmplt_access_list_entries(config_data):
-    if "aces" in config_data:
-        command = []
+    if "aces" not in config_data:
+        return
+    command = []
 
-        def source_destination_common_config(config_data, command, type):
-            if config_data[type].get("address"):
-                command += " {address}".format(**config_data[type])
-                if config_data[type].get("wildcard_bits"):
-                    command += " {wildcard_bits}".format(**config_data[type])
-            elif config_data[type].get("any"):
-                command += " any".format(**config_data[type])
-            elif config_data[type].get("host"):
-                command += " host {host}".format(**config_data[type])
-            elif config_data[type].get("object_group"):
-                command += " object-group {object_group}".format(
-                    **config_data[type]
-                )
-            if config_data[type].get("port_protocol"):
-                port_proto_type = list(
-                    config_data[type]["port_protocol"].keys()
-                )[0]
-                command += " {0} {1}".format(
-                    port_proto_type,
-                    config_data[type]["port_protocol"][port_proto_type],
-                )
-            return command
-
-        command = ""
-        proto_option = None
-        if config_data.get("aces"):
-            aces = config_data["aces"]
-            if aces.get("sequence") and config_data.get("afi") == "ipv4":
-                command += "{sequence}".format(**aces)
-            if (
-                aces.get("grant")
-                and aces.get("sequence")
-                and config_data.get("afi") == "ipv4"
-            ):
-                command += " {grant}".format(**aces)
-            elif (
-                aces.get("grant")
-                and aces.get("sequence")
-                and config_data.get("afi") == "ipv6"
-            ):
-                command += "{grant}".format(**aces)
-            elif aces.get("grant"):
-                command += "{grant}".format(**aces)
-            if aces.get("protocol_options"):
-                if "protocol_number" in aces["protocol_options"]:
-                    command += " {protocol_number}".format(
-                        **aces["protocol_options"]
-                    )
-                else:
-                    command += " {0}".format(list(aces["protocol_options"])[0])
-                    proto_option = aces["protocol_options"].get(
-                        list(aces["protocol_options"])[0]
-                    )
-            elif aces.get("protocol"):
-                command += " {protocol}".format(**aces)
-            if aces.get("source"):
-                command = source_destination_common_config(
-                    aces, command, "source"
-                )
-            if aces.get("destination"):
-                command = source_destination_common_config(
-                    aces, command, "destination"
-                )
-            if proto_option:
-                command += " {0}".format(list(proto_option.keys())[0])
-            if aces.get("dscp"):
-                command += " dscp {dscp}".format(**aces)
-            if aces.get("sequence") and config_data.get("afi") == "ipv6":
-                command += " sequence {sequence}".format(**aces)
-            if aces.get("fragments"):
-                command += " fragments {fragments}".format(**aces)
-            if aces.get("log"):
-                command += " log"
-                if aces["log"].get("user_cookie"):
-                    command += " {user_cookie}".format(**aces["log"])
-            if aces.get("log_input"):
-                command += " log-input"
-                if aces["log_input"].get("user_cookie"):
-                    command += " {user_cookie}".format(**aces["log_input"])
-            if aces.get("option"):
-                option_val = list(aces.get("option").keys())[0]
-                command += " option {0}".format(option_val)
-            if aces.get("precedence"):
-                command += " precedence {precedence}".format(**aces)
-            if aces.get("time_range"):
-                command += " time-range {time_range}".format(**aces)
-            if aces.get("tos"):
-                command += " tos"
-                if aces["tos"].get("service_value"):
-                    command += " {service_value}".format(**aces["tos"])
-                elif aces["tos"].get("max_reliability"):
-                    command += " max-reliability"
-                elif aces["tos"].get("max_throughput"):
-                    command += " max-throughput"
-                elif aces["tos"].get("min_delay"):
-                    command += " min-delay"
-                elif aces["tos"].get("min_monetary_cost"):
-                    command += " min-monetary-cost"
-                elif aces["tos"].get("normal"):
-                    command += " normal"
-            if aces.get("ttl"):
-                command += " ttl {0}".format(list(aces["ttl"])[0])
-                proto_option = aces["ttl"].get(list(aces["ttl"])[0])
-                command += " {0}".format(proto_option)
-            return command
+    def source_destination_common_config(config_data, command, type):
+        if config_data[type].get("address"):
+            command += " {address}".format(**config_data[type])
+            if config_data[type].get("wildcard_bits"):
+                command += " {wildcard_bits}".format(**config_data[type])
+        elif config_data[type].get("any"):
+            command += " any".format(**config_data[type])
+        elif config_data[type].get("host"):
+            command += " host {host}".format(**config_data[type])
+        elif config_data[type].get("object_group"):
+            command += " object-group {object_group}".format(
+                **config_data[type]
+            )
+        if config_data[type].get("port_protocol"):
+            port_proto_type = list(
+                config_data[type]["port_protocol"].keys()
+            )[0]
+            command += " {0} {1}".format(
+                port_proto_type,
+                config_data[type]["port_protocol"][port_proto_type],
+            )
         return command
+
+    command = ""
+    proto_option = None
+    if config_data.get("aces"):
+        aces = config_data["aces"]
+        if aces.get("sequence") and config_data.get("afi") == "ipv4":
+            command += "{sequence}".format(**aces)
+        if aces.get("grant"):
+            if aces.get("sequence") and config_data.get("afi") == "ipv4":
+                command += " {grant}".format(**aces)
+            elif aces.get("sequence") and config_data.get("afi") == "ipv6":
+                command += "{grant}".format(**aces)
+            else:
+                command += "{grant}".format(**aces)
+        if aces.get("protocol_options"):
+            if "protocol_number" in aces["protocol_options"]:
+                command += " {protocol_number}".format(
+                    **aces["protocol_options"]
+                )
+            else:
+                command += " {0}".format(list(aces["protocol_options"])[0])
+                proto_option = aces["protocol_options"].get(
+                    list(aces["protocol_options"])[0]
+                )
+        elif aces.get("protocol"):
+            command += " {protocol}".format(**aces)
+        if aces.get("source"):
+            command = source_destination_common_config(
+                aces, command, "source"
+            )
+        if aces.get("destination"):
+            command = source_destination_common_config(
+                aces, command, "destination"
+            )
+        if proto_option:
+            command += " {0}".format(list(proto_option.keys())[0])
+        if aces.get("dscp"):
+            command += " dscp {dscp}".format(**aces)
+        if aces.get("sequence") and config_data.get("afi") == "ipv6":
+            command += " sequence {sequence}".format(**aces)
+        if aces.get("fragments"):
+            command += " fragments {fragments}".format(**aces)
+        if aces.get("log"):
+            command += " log"
+            if aces["log"].get("user_cookie"):
+                command += " {user_cookie}".format(**aces["log"])
+        if aces.get("log_input"):
+            command += " log-input"
+            if aces["log_input"].get("user_cookie"):
+                command += " {user_cookie}".format(**aces["log_input"])
+        if aces.get("option"):
+            option_val = list(aces.get("option").keys())[0]
+            command += " option {0}".format(option_val)
+        if aces.get("precedence"):
+            command += " precedence {precedence}".format(**aces)
+        if aces.get("time_range"):
+            command += " time-range {time_range}".format(**aces)
+        if aces.get("tos"):
+            command += " tos"
+            if aces["tos"].get("service_value"):
+                command += " {service_value}".format(**aces["tos"])
+            elif aces["tos"].get("max_reliability"):
+                command += " max-reliability"
+            elif aces["tos"].get("max_throughput"):
+                command += " max-throughput"
+            elif aces["tos"].get("min_delay"):
+                command += " min-delay"
+            elif aces["tos"].get("min_monetary_cost"):
+                command += " min-monetary-cost"
+            elif aces["tos"].get("normal"):
+                command += " normal"
+        if aces.get("ttl"):
+            command += " ttl {0}".format(list(aces["ttl"])[0])
+            proto_option = aces["ttl"].get(list(aces["ttl"])[0])
+            command += " {0}".format(proto_option)
+        return command
+    return command
 
 
 class AclsTemplate(NetworkTemplate):

@@ -38,10 +38,7 @@ class InterfacesFacts(object):
         self.argument_spec = InterfacesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
         if subspec:
-            if options:
-                facts_argument_spec = spec[subspec][options]
-            else:
-                facts_argument_spec = spec[subspec]
+            facts_argument_spec = spec[subspec][options] if options else spec[subspec]
         else:
             facts_argument_spec = spec
 
@@ -66,8 +63,7 @@ class InterfacesFacts(object):
         config = ("\n" + data).split("\ninterface ")
         for conf in config:
             if conf:
-                obj = self.render_config(self.generated_spec, conf)
-                if obj:
+                if obj := self.render_config(self.generated_spec, conf):
                     objs.append(obj)
         facts = {}
 
@@ -93,7 +89,7 @@ class InterfacesFacts(object):
         """
         config = deepcopy(spec)
         match = re.search(r"^(\S+)", conf)
-        intf = match.group(1)
+        intf = match[1]
 
         if get_interface_type(intf) == "unknown":
             return {}

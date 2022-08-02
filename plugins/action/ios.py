@@ -42,9 +42,7 @@ class ActionModule(ActionNetworkModule):
         del tmp  # tmp no longer has any effect
 
         module_name = self._task.action.split(".")[-1]
-        self._config_module = (
-            True if module_name in ["ios_config", "config"] else False
-        )
+        self._config_module = module_name in ["ios_config", "config"]
         persistent_connection = self._play_context.connection.split(".")[-1]
         warnings = []
 
@@ -90,9 +88,10 @@ class ActionModule(ActionNetworkModule):
                 )
 
             display.vvv(
-                "using connection plugin %s (was local)" % pc.connection,
+                f"using connection plugin {pc.connection} (was local)",
                 pc.remote_addr,
             )
+
 
             command_timeout = (
                 int(provider["timeout"])
@@ -104,7 +103,7 @@ class ActionModule(ActionNetworkModule):
             )
 
             socket_path = connection.run()
-            display.vvvv("socket_path: %s" % socket_path, pc.remote_addr)
+            display.vvvv(f"socket_path: {socket_path}", pc.remote_addr)
             if not socket_path:
                 return {
                     "failed": True,
@@ -115,16 +114,16 @@ class ActionModule(ActionNetworkModule):
             task_vars["ansible_socket"] = socket_path
             warnings.append(
                 [
-                    "connection local support for this module is deprecated and will be removed in version 2.14, use connection %s"
-                    % pc.connection
+                    f"connection local support for this module is deprecated and will be removed in version 2.14, use connection {pc.connection}"
                 ]
             )
+
         else:
             return {
                 "failed": True,
-                "msg": "Connection type %s is not valid for this module"
-                % self._play_context.connection,
+                "msg": f"Connection type {self._play_context.connection} is not valid for this module",
             }
+
 
         result = super(ActionModule, self).run(task_vars=task_vars)
         if warnings:

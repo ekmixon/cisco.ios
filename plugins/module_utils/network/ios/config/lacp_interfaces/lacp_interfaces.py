@@ -64,9 +64,7 @@ class Lacp_Interfaces(ConfigBase):
             "lacp_interfaces"
         )
 
-        if not lacp_interfaces_facts:
-            return []
-        return lacp_interfaces_facts
+        return lacp_interfaces_facts or []
 
     def execute_module(self):
         """ Execute the module
@@ -75,8 +73,8 @@ class Lacp_Interfaces(ConfigBase):
         :returns: The result from module execution
         """
         result = {"changed": False}
-        commands = list()
-        warnings = list()
+        commands = []
+        warnings = []
 
         if self.state in self.ACTION_STATES:
             existing_lacp_interfaces_facts = self.get_lacp_interfaces_facts()
@@ -186,7 +184,7 @@ class Lacp_Interfaces(ConfigBase):
             else:
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -213,7 +211,7 @@ class Lacp_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
                 continue
             have_dict = filter_dict_having_none_value(interface, each)
-            commands.extend(self._clear_config(dict(), have_dict))
+            commands.extend(self._clear_config({}, have_dict))
             commands.extend(self._set_config(interface, each))
         # Remove the duplicate interface call
         commands = remove_duplicate_interface(commands)
@@ -234,7 +232,7 @@ class Lacp_Interfaces(ConfigBase):
                 if interface["name"] == each["name"]:
                     break
             else:
-                commands.extend(self._set_config(interface, dict()))
+                commands.extend(self._set_config(interface, {}))
                 continue
             commands.extend(self._set_config(interface, each))
 
@@ -260,7 +258,7 @@ class Lacp_Interfaces(ConfigBase):
                 commands.extend(self._clear_config(interface, each))
         else:
             for each in have:
-                commands.extend(self._clear_config(dict(), each))
+                commands.extend(self._clear_config({}, each))
 
         return commands
 
@@ -271,9 +269,7 @@ class Lacp_Interfaces(ConfigBase):
 
         want_dict = dict_to_set(want)
         have_dict = dict_to_set(have)
-        diff = want_dict - have_dict
-
-        if diff:
+        if diff := want_dict - have_dict:
             port_priotity = dict(diff).get("port_priority")
             max_bundle = dict(diff).get("max_bundle")
             fast_switchover = dict(diff).get("fast_switchover")

@@ -235,23 +235,22 @@ def get_switchport(name, module):
     native = re.search("Trunking Native Mode VLAN: (\\d+)", config)
     trunk = re.search("Trunking VLANs Enabled: (.+)$", config, re.M)
     if mode:
-        mode = mode.group(1)
+        mode = mode[1]
     if access:
-        access = access.group(1)
+        access = access[1]
     if native:
-        native = native.group(1)
+        native = native[1]
     if trunk:
-        trunk = trunk.group(1)
+        trunk = trunk[1]
     if trunk == "ALL":
         trunk = "1-4094"
-    switchport_config = {
+    return {
         "interface": name,
         "mode": mode,
         "access_vlan": access,
         "native_vlan": native,
         "trunk_vlans": trunk,
     }
-    return switchport_config
 
 
 def remove_switchport_config_commands(name, existing, proposed, module):
@@ -274,8 +273,7 @@ def remove_switchport_config_commands(name, existing, proposed, module):
         # 5) Existing: None  Proposed: 1,2,3 - None removed.
         existing_vlans = existing.get("trunk_vlans_list")
         proposed_vlans = proposed.get("trunk_vlans_list")
-        vlans_to_remove = set(proposed_vlans).intersection(existing_vlans)
-        if vlans_to_remove:
+        if vlans_to_remove := set(proposed_vlans).intersection(existing_vlans):
             proposed_allowed_vlans = proposed.get("trunk_allowed_vlans")
             remove_trunk_allowed_vlans = proposed.get(
                 "trunk_vlans", proposed_allowed_vlans
@@ -293,7 +291,7 @@ def remove_switchport_config_commands(name, existing, proposed, module):
             )
             commands.append(command)
     if commands:
-        commands.insert(0, "interface " + name)
+        commands.insert(0, f"interface {name}")
     return commands
 
 
@@ -305,10 +303,10 @@ def get_switchport_config_commands(name, existing, proposed, module):
     commands = []
     command = None
     if proposed_mode != existing_mode:
-        if proposed_mode == "trunk":
-            command = "switchport mode trunk"
-        elif proposed_mode == "access":
+        if proposed_mode == "access":
             command = "switchport mode access"
+        elif proposed_mode == "trunk":
+            command = "switchport mode trunk"
     if command:
         commands.append(command)
     if proposed_mode == "access":
@@ -333,8 +331,9 @@ def get_switchport_config_commands(name, existing, proposed, module):
             else:
                 existing_vlans = existing.get("trunk_vlans_list")
                 proposed_vlans = proposed.get("trunk_vlans_list")
-                vlans_to_add = set(proposed_vlans).difference(existing_vlans)
-                if vlans_to_add:
+                if vlans_to_add := set(proposed_vlans).difference(
+                    existing_vlans
+                ):
                     command = "switchport trunk allowed vlan add {0}".format(
                         proposed.get("trunk_vlans")
                     )
@@ -348,7 +347,7 @@ def get_switchport_config_commands(name, existing, proposed, module):
             )
             commands.append(command)
     if commands:
-        commands.insert(0, "interface " + name)
+        commands.insert(0, f"interface {name}")
     return commands
 
 
@@ -364,18 +363,17 @@ def is_switchport_default(existing):
     c2 = str(existing["native_vlan"]) == "1"
     c3 = existing["trunk_vlans"] == "1-4094"
     c4 = existing["mode"] == "access"
-    default = c1 and c2 and c3 and c4
-    return default
+    return c1 and c2 and c3 and c4
 
 
 def default_switchport_config(name):
-    commands = []
-    commands.append("interface " + name)
-    commands.append("switchport mode access")
-    commands.append("switch access vlan 1")
-    commands.append("switchport trunk native vlan 1")
-    commands.append("switchport trunk allowed vlan all")
-    return commands
+    return [
+        f"interface {name}",
+        "switchport mode access",
+        "switch access vlan 1",
+        "switchport trunk native vlan 1",
+        "switchport trunk allowed vlan all",
+    ]
 
 
 def vlan_range_to_list(vlans):
@@ -398,8 +396,7 @@ def get_list_of_vlans(module):
     vlans = set()
     lines = config.strip().splitlines()
     for line in lines:
-        line_parts = line.split()
-        if line_parts:
+        if line_parts := line.split():
             try:
                 int(line_parts[0])
             except ValueError:
@@ -420,8 +417,7 @@ def flatten_list(commands):
 
 def map_params_to_obj(module):
     obj = []
-    aggregate = module.params.get("aggregate")
-    if aggregate:
+    if aggregate := module.params.get("aggregate"):
         for item in aggregate:
             for key in item:
                 if item.get(key) is None:
@@ -459,11 +455,16 @@ def main():
     aggregate_spec = deepcopy(element_spec)
     # remove default in aggregate spec, to handle common arguments
     remove_default_spec(aggregate_spec)
-    argument_spec = dict(
-        aggregate=dict(type="list", elements="dict", options=aggregate_spec)
+    argument_spec = (
+        dict(
+            aggregate=dict(
+                type="list", elements="dict", options=aggregate_spec
+            )
+        )
+        | element_spec
     )
-    argument_spec.update(element_spec)
-    argument_spec.update(ios_argument_spec)
+
+    argument_spec |= ios_argument_spec
     module = AnsibleModule(
         argument_spec=argument_spec,
         mutually_exclusive=[
@@ -473,7 +474,7 @@ def main():
         ],
         supports_check_mode=True,
     )
-    warnings = list()
+    warnings = []
     commands = []
     result = {"changed": False, "warnings": warnings}
     want = map_params_to_obj(module)
@@ -493,7 +494,7 @@ def main():
             trunk_vlans=trunk_vlans,
             trunk_allowed_vlans=trunk_allowed_vlans,
         )
-        proposed = dict((k, v) for k, v in args.items() if v is not None)
+        proposed = {k: v for k, v in args.items() if v is not None}
         name = name.lower()
         if mode == "access" and state == "present" and not access_vlan:
             module.fail_json(
@@ -523,12 +524,14 @@ You should update the portchannel config."""
             module.fail_json(
                 msg="Make sure you are using the FULL interface name"
             )
-        if trunk_vlans or trunk_allowed_vlans:
-            if trunk_vlans:
-                trunk_vlans_list = vlan_range_to_list(trunk_vlans)
-            elif trunk_allowed_vlans:
-                trunk_vlans_list = vlan_range_to_list(trunk_allowed_vlans)
-                proposed["allowed"] = True
+        if trunk_vlans:
+            trunk_vlans_list = vlan_range_to_list(trunk_vlans)
+            existing_trunks_list = vlan_range_to_list(existing["trunk_vlans"])
+            existing["trunk_vlans_list"] = existing_trunks_list
+            proposed["trunk_vlans_list"] = trunk_vlans_list
+        elif trunk_allowed_vlans:
+            trunk_vlans_list = vlan_range_to_list(trunk_allowed_vlans)
+            proposed["allowed"] = True
             existing_trunks_list = vlan_range_to_list(existing["trunk_vlans"])
             existing["trunk_vlans_list"] = existing_trunks_list
             proposed["trunk_vlans_list"] = trunk_vlans_list
